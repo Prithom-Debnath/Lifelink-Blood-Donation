@@ -8,7 +8,7 @@ LifeLink is a lightweight, educational backend application built with **Go** and
 
 - [x] **Milestone 1: Project skeleton and health endpoint**
 - [x] **Milestone 2: MongoDB connection and clean shutdown**
-- [ ] Milestone 3: Donor data model and repository
+- [x] **Milestone 3: Donor data model and repository**
 - [ ] Milestone 4: Donor CRUD endpoints
 - [ ] Milestone 5: Blood request model and endpoints
 - [ ] Milestone 6: Input validation and standardized error handling
@@ -32,10 +32,10 @@ The project uses a standard, beginner-friendly modular structure to separate con
 ├── internal/
 │   ├── config/             # Reads environment variables with defaults (.env)
 │   ├── database/           # MongoDB connection lifecycle, Ping reachability check, and cleanup
+│   ├── models/             # Data models (Donor struct with BSON/JSON tags)
+│   ├── repositories/       # MongoDB data access layer (Donor CRUD operations and error handling)
 │   ├── handlers/           # HTTP controllers handling request and response logic
 │   ├── routes/             # Gin engine router setup, route grouping, and tests
-│   ├── models/             # (Upcoming) Data models (Donor, Request, User)
-│   ├── repositories/       # (Upcoming) MongoDB data access layer
 │   └── middleware/         # (Upcoming) Authentication and logging middleware
 ├── web/                    # (Upcoming) Simple static frontend files
 ├── .env.example            # Sample environment variables
@@ -90,6 +90,41 @@ Environment variables are loaded from the local `.env` file (which is excluded f
 
 ---
 
+## Donor Model & Repository (Milestone 3)
+
+### Donor Model (`internal/models/donor.go`)
+Represents donor documents stored in MongoDB collection `donors`:
+
+| Field | Type | Description | BSON Key | JSON Key |
+|---|---|---|---|---|
+| `ID` | `bson.ObjectID` | Primary document identifier | `_id` | `id` |
+| `Name` | `string` | Full name of donor | `name` | `name` |
+| `Email` | `string` | Contact email address | `email` | `email` |
+| `Phone` | `string` | Contact phone number | `phone` | `phone` |
+| `BloodGroup` | `string` | ABO/Rh blood type (e.g., `O+`, `A-`) | `blood_group` | `blood_group` / `bloodGroup` |
+| `City` | `string` | Donor location / city | `city` | `city` |
+| `Availability` | `bool` | Whether donor is currently available to donate | `availability` | `availability` |
+| `CreatedAt` | `time.Time` | Record creation timestamp (UTC) | `created_at` | `created_at` |
+| `UpdatedAt` | `time.Time` | Record last modification timestamp (UTC) | `updated_at` | `updated_at` |
+
+*Note: The model includes flexible JSON deserialization that accepts both snake_case (`blood_group`) and camelCase (`bloodGroup`).*
+
+### Donor Repository (`internal/repositories/donor_repository.go`)
+Provides clean data access methods using the official MongoDB Go driver:
+
+- `Create(ctx, donor)`: Inserts a new donor record; automatically assigns an ObjectID and sets `CreatedAt` & `UpdatedAt` timestamps.
+- `List(ctx)`: Returns all donor records as a slice (guarantees an empty slice `[]` rather than `null` when no documents exist).
+- `FindByID(ctx, id)`: Finds a single donor by hex ObjectID string.
+- `Update(ctx, id, donor)`: Modifies donor fields and updates the `UpdatedAt` timestamp.
+- `Delete(ctx, id)`: Deletes a donor record by ID.
+
+### Error Handling
+The repository exports explicit sentinel errors so callers can handle edge cases cleanly:
+- `repositories.ErrInvalidID`: Returned when an ID cannot be parsed as a 24-character hexadecimal MongoDB ObjectID.
+- `repositories.ErrNotFound`: Returned when a query, update, or delete targets an ID that does not exist in the database.
+
+---
+
 ## Setup & Running
 
 ### 1. Configure Environment Variables
@@ -107,12 +142,6 @@ go mod tidy
 ```powershell
 go run cmd/server/main.go
 ```
-
-When started, the server will:
-1. Load configuration from `.env`.
-2. Connect to MongoDB and verify reachability using `Ping` with a 5-second deadline.
-3. Start the HTTP server in a non-blocking goroutine on the specified port.
-4. Listen for termination signals (`Ctrl+C`, `SIGINT`, `SIGTERM`) to trigger a clean shutdown of both the HTTP server and the MongoDB connection.
 
 ---
 
@@ -138,6 +167,7 @@ When you press `Ctrl+C` in the terminal:
   "message": "LifeLink API is running"
 }
 ```
+*(HTTP handlers and REST endpoints for donor CRUD will be wired in Milestone 4.)*
 
 ---
 
@@ -147,4 +177,4 @@ Run all unit and integration tests across the repository:
 ```powershell
 go test -v ./...
 ```
-*(Tests include route response validation and database ping/connect/disconnect tests.)*
+*(Tests include route response validation, database connection lifecycle, model JSON deserialization, and full repository CRUD tests with invalid ID and missing record checks.)*
