@@ -3,12 +3,13 @@ package routes
 import (
 	"lifelink/internal/config"
 	"lifelink/internal/handlers"
+	"lifelink/internal/repositories"
 
 	"github.com/gin-gonic/gin"
 )
 
 // SetupRouter initializes the Gin engine, attaches middleware, and registers all API routes.
-func SetupRouter(cfg *config.Config) *gin.Engine {
+func SetupRouter(cfg *config.Config, donorRepo repositories.DonorRepository) *gin.Engine {
 	// Set Gin mode based on the environment configuration
 	if cfg.AppEnv == "production" {
 		gin.SetMode(gin.ReleaseMode)
@@ -23,6 +24,16 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	api := router.Group("/api")
 	{
 		api.GET("/health", handlers.HealthCheck)
+
+		// Register donor endpoints if a repository is provided
+		if donorRepo != nil {
+			donorHandler := handlers.NewDonorHandler(donorRepo)
+			api.POST("/donors", donorHandler.CreateDonor)
+			api.GET("/donors", donorHandler.ListDonors)
+			api.GET("/donors/:id", donorHandler.GetDonorByID)
+			api.PUT("/donors/:id", donorHandler.UpdateDonor)
+			api.DELETE("/donors/:id", donorHandler.DeleteDonor)
+		}
 	}
 
 	return router

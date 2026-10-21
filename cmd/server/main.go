@@ -12,6 +12,7 @@ import (
 
 	"lifelink/internal/config"
 	"lifelink/internal/database"
+	"lifelink/internal/repositories"
 	"lifelink/internal/routes"
 )
 
@@ -25,17 +26,20 @@ func main() {
 		log.Fatalf("Database startup failure: %v", err)
 	}
 
-	// 3. Initialize HTTP router
-	router := routes.SetupRouter(cfg)
+	// 3. Initialize repositories
+	donorRepo := repositories.NewDonorRepository(db.Database)
 
-	// 4. Configure the HTTP server
+	// 4. Initialize HTTP router with routes and middleware
+	router := routes.SetupRouter(cfg, donorRepo)
+
+	// 5. Configure the HTTP server
 	addr := ":" + cfg.Port
 	srv := &http.Server{
 		Addr:    addr,
 		Handler: router,
 	}
 
-	// 5. Start the server in a separate background goroutine so it doesn't block shutdown handling
+	// 6. Start the server in a separate background goroutine
 	go func() {
 		log.Printf("LifeLink Blood Donation System server listening on port %s (env: %s)...", cfg.Port, cfg.AppEnv)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -43,7 +47,7 @@ func main() {
 		}
 	}()
 
-	// 6. Graceful shutdown: wait for OS interrupt signal (Ctrl+C / SIGINT / SIGTERM)
+	// 7. Graceful shutdown: wait for OS interrupt signal (Ctrl+C / SIGINT / SIGTERM)
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	sig := <-quit
@@ -59,7 +63,7 @@ func main() {
 		log.Println("HTTP server stopped accepting new requests.")
 	}
 
-	// 7. Close MongoDB connection cleanly
+	// 8. Close MongoDB connection cleanly
 	if err := db.Close(); err != nil {
 		log.Printf("Error during MongoDB disconnection: %v", err)
 	}

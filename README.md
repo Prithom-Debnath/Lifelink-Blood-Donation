@@ -9,7 +9,7 @@ LifeLink is a lightweight, educational backend application built with **Go** and
 - [x] **Milestone 1: Project skeleton and health endpoint**
 - [x] **Milestone 2: MongoDB connection and clean shutdown**
 - [x] **Milestone 3: Donor data model and repository**
-- [ ] Milestone 4: Donor CRUD endpoints
+- [x] **Milestone 4: Donor CRUD endpoints**
 - [ ] Milestone 5: Blood request model and endpoints
 - [ ] Milestone 6: Input validation and standardized error handling
 - [ ] Milestone 7: User registration and password hashing with bcrypt
@@ -34,7 +34,7 @@ The project uses a standard, beginner-friendly modular structure to separate con
 │   ├── database/           # MongoDB connection lifecycle, Ping reachability check, and cleanup
 │   ├── models/             # Data models (Donor struct with BSON/JSON tags)
 │   ├── repositories/       # MongoDB data access layer (Donor CRUD operations and error handling)
-│   ├── handlers/           # HTTP controllers handling request and response logic
+│   ├── handlers/           # HTTP controllers (Health and Donor CRUD handlers)
 │   ├── routes/             # Gin engine router setup, route grouping, and tests
 │   └── middleware/         # (Upcoming) Authentication and logging middleware
 ├── web/                    # (Upcoming) Simple static frontend files
@@ -90,7 +90,7 @@ Environment variables are loaded from the local `.env` file (which is excluded f
 
 ---
 
-## Donor Model & Repository (Milestone 3)
+## Donor Model & Repository (Milestone 3 & 4)
 
 ### Donor Model (`internal/models/donor.go`)
 Represents donor documents stored in MongoDB collection `donors`:
@@ -107,21 +107,137 @@ Represents donor documents stored in MongoDB collection `donors`:
 | `CreatedAt` | `time.Time` | Record creation timestamp (UTC) | `created_at` | `created_at` |
 | `UpdatedAt` | `time.Time` | Record last modification timestamp (UTC) | `updated_at` | `updated_at` |
 
-*Note: The model includes flexible JSON deserialization that accepts both snake_case (`blood_group`) and camelCase (`bloodGroup`).*
+---
 
-### Donor Repository (`internal/repositories/donor_repository.go`)
-Provides clean data access methods using the official MongoDB Go driver:
+## API Endpoints (Currently Implemented)
 
-- `Create(ctx, donor)`: Inserts a new donor record; automatically assigns an ObjectID and sets `CreatedAt` & `UpdatedAt` timestamps.
-- `List(ctx)`: Returns all donor records as a slice (guarantees an empty slice `[]` rather than `null` when no documents exist).
-- `FindByID(ctx, id)`: Finds a single donor by hex ObjectID string.
-- `Update(ctx, id, donor)`: Modifies donor fields and updates the `UpdatedAt` timestamp.
-- `Delete(ctx, id)`: Deletes a donor record by ID.
+All API endpoints use the `/api` prefix and return standard JSON.
 
-### Error Handling
-The repository exports explicit sentinel errors so callers can handle edge cases cleanly:
-- `repositories.ErrInvalidID`: Returned when an ID cannot be parsed as a 24-character hexadecimal MongoDB ObjectID.
-- `repositories.ErrNotFound`: Returned when a query, update, or delete targets an ID that does not exist in the database.
+### 1. Health Check
+- **Method & Path:** `GET /api/health`
+- **Status Code:** `200 OK`
+- **Response Example:**
+  ```json
+  {
+    "status": "ok",
+    "message": "LifeLink API is running"
+  }
+  ```
+
+### 2. Create Donor
+- **Method & Path:** `POST /api/donors`
+- **Status Code:** `201 Created` on success, `400 Bad Request` on malformed JSON payload.
+- **Request Body Example:**
+  ```json
+  {
+    "name": "Tanvir Hasan",
+    "email": "tanvir@example.com",
+    "phone": "+8801712345678",
+    "blood_group": "A+",
+    "city": "Dhaka",
+    "availability": true
+  }
+  ```
+- **Response Example (`201 Created`):**
+  ```json
+  {
+    "id": "6ad9288b33ace84ae4a82b8a",
+    "name": "Tanvir Hasan",
+    "email": "tanvir@example.com",
+    "phone": "+8801712345678",
+    "blood_group": "A+",
+    "city": "Dhaka",
+    "availability": true,
+    "created_at": "2026-10-22T03:03:07.123Z",
+    "updated_at": "2026-10-22T03:03:07.123Z"
+  }
+  ```
+
+### 3. List All Donors
+- **Method & Path:** `GET /api/donors`
+- **Status Code:** `200 OK`
+- **Response Example:**
+  ```json
+  [
+    {
+      "id": "6ad9288b33ace84ae4a82b8a",
+      "name": "Tanvir Hasan",
+      "email": "tanvir@example.com",
+      "phone": "+8801712345678",
+      "blood_group": "A+",
+      "city": "Dhaka",
+      "availability": true,
+      "created_at": "2026-10-22T03:03:07.123Z",
+      "updated_at": "2026-10-22T03:03:07.123Z"
+    }
+  ]
+  ```
+
+### 4. Get Donor by ID
+- **Method & Path:** `GET /api/donors/:id`
+- **Status Codes:**
+  - `200 OK`: Donor found.
+  - `400 Bad Request`: `:id` is not a valid 24-character hex MongoDB ObjectID.
+  - `404 Not Found`: No donor exists with the provided ID.
+- **Response Example (`200 OK`):**
+  ```json
+  {
+    "id": "6ad9288b33ace84ae4a82b8a",
+    "name": "Tanvir Hasan",
+    "email": "tanvir@example.com",
+    "phone": "+8801712345678",
+    "blood_group": "A+",
+    "city": "Dhaka",
+    "availability": true,
+    "created_at": "2026-10-22T03:03:07.123Z",
+    "updated_at": "2026-10-22T03:03:07.123Z"
+  }
+  ```
+
+### 5. Update Donor
+- **Method & Path:** `PUT /api/donors/:id`
+- **Status Codes:**
+  - `200 OK`: Donor updated successfully.
+  - `400 Bad Request`: Invalid ID format or invalid JSON payload.
+  - `404 Not Found`: Donor does not exist.
+- **Request Body Example:**
+  ```json
+  {
+    "name": "Tanvir Hasan",
+    "email": "tanvir.new@example.com",
+    "phone": "+8801712345678",
+    "blood_group": "A+",
+    "city": "Sylhet",
+    "availability": false
+  }
+  ```
+- **Response Example (`200 OK`):**
+  ```json
+  {
+    "id": "6ad9288b33ace84ae4a82b8a",
+    "name": "Tanvir Hasan",
+    "email": "tanvir.new@example.com",
+    "phone": "+8801712345678",
+    "blood_group": "A+",
+    "city": "Sylhet",
+    "availability": false,
+    "created_at": "2026-10-22T03:03:07.123Z",
+    "updated_at": "2026-10-22T03:05:12.456Z"
+  }
+  ```
+
+### 6. Delete Donor
+- **Method & Path:** `DELETE /api/donors/:id`
+- **Status Codes:**
+  - `200 OK`: Donor record deleted.
+  - `400 Bad Request`: Invalid ID format.
+  - `404 Not Found`: Donor not found.
+- **Response Example (`200 OK`):**
+  ```json
+  {
+    "message": "Donor deleted successfully"
+  }
+  ```
 
 ---
 
@@ -155,26 +271,10 @@ When you press `Ctrl+C` in the terminal:
 
 ---
 
-## API Endpoints (Currently Implemented)
-
-### Health Check
-- **Endpoint:** `GET /api/health`
-- **Authentication:** None
-- **Response:** `200 OK`
-```json
-{
-  "status": "ok",
-  "message": "LifeLink API is running"
-}
-```
-*(HTTP handlers and REST endpoints for donor CRUD will be wired in Milestone 4.)*
-
----
-
 ## Running Tests
 
 Run all unit and integration tests across the repository:
 ```powershell
 go test -v ./...
 ```
-*(Tests include route response validation, database connection lifecycle, model JSON deserialization, and full repository CRUD tests with invalid ID and missing record checks.)*
+*(Tests include route response validation, database connection lifecycle, model JSON deserialization, repository CRUD, and full handler HTTP tests covering status codes 200, 201, 400, and 404.)*
