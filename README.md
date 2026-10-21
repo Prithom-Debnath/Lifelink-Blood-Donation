@@ -10,7 +10,8 @@ LifeLink is a lightweight, educational backend application built with **Go** and
 - [x] **Milestone 2: MongoDB connection and clean shutdown**
 - [x] **Milestone 3: Donor data model and repository**
 - [x] **Milestone 4: Donor CRUD endpoints**
-- [ ] Milestone 5: Blood request model and endpoints
+- [x] **Milestone 5 (Part 1): Blood request model and repository**
+- [ ] Milestone 5 (Part 2): Blood request HTTP endpoints
 - [ ] Milestone 6: Input validation and standardized error handling
 - [ ] Milestone 7: User registration and password hashing with bcrypt
 - [ ] Milestone 8: JWT authentication middleware for write operations
@@ -32,8 +33,8 @@ The project uses a standard, beginner-friendly modular structure to separate con
 ├── internal/
 │   ├── config/             # Reads environment variables with defaults (.env)
 │   ├── database/           # MongoDB connection lifecycle, Ping reachability check, and cleanup
-│   ├── models/             # Data models (Donor struct with BSON/JSON tags)
-│   ├── repositories/       # MongoDB data access layer (Donor CRUD operations and error handling)
+│   ├── models/             # Data models (Donor, BloodRequest structs with BSON/JSON tags)
+│   ├── repositories/       # MongoDB data access layer (Donor and BloodRequest repositories)
 │   ├── handlers/           # HTTP controllers (Health and Donor CRUD handlers)
 │   ├── routes/             # Gin engine router setup, route grouping, and tests
 │   └── middleware/         # (Upcoming) Authentication and logging middleware
@@ -90,10 +91,10 @@ Environment variables are loaded from the local `.env` file (which is excluded f
 
 ---
 
-## Donor Model & Repository (Milestone 3 & 4)
+## Models & Repositories
 
-### Donor Model (`internal/models/donor.go`)
-Represents donor documents stored in MongoDB collection `donors`:
+### 1. Donor Model & Repository (`internal/models/donor.go`)
+Represents registered donors in MongoDB collection `donors`:
 
 | Field | Type | Description | BSON Key | JSON Key |
 |---|---|---|---|---|
@@ -106,6 +107,39 @@ Represents donor documents stored in MongoDB collection `donors`:
 | `Availability` | `bool` | Whether donor is currently available to donate | `availability` | `availability` |
 | `CreatedAt` | `time.Time` | Record creation timestamp (UTC) | `created_at` | `created_at` |
 | `UpdatedAt` | `time.Time` | Record last modification timestamp (UTC) | `updated_at` | `updated_at` |
+
+**Repository Methods:** `Create(ctx, donor)`, `List(ctx)`, `FindByID(ctx, id)`, `Update(ctx, id, donor)`, `Delete(ctx, id)`.
+
+---
+
+### 2. Blood Request Model & Repository (`internal/models/blood_request.go`)
+Represents urgent blood requests in MongoDB collection `blood_requests`:
+
+| Field | Type | Description | BSON Key | JSON Key |
+|---|---|---|---|---|
+| `ID` | `bson.ObjectID` | Primary document identifier | `_id` | `id` |
+| `PatientName` | `string` | Patient or contact person's name | `patient_name` | `patient_name` / `patientName` |
+| `BloodGroup` | `string` | Required blood group (e.g., `B+`, `O-`) | `blood_group` | `blood_group` / `bloodGroup` |
+| `Hospital` | `string` | Hospital or clinic name | `hospital` | `hospital` |
+| `City` | `string` | City location | `city` | `city` |
+| `ContactPhone` | `string` | Emergency contact phone number | `contact_phone` | `contact_phone` / `contactPhone` |
+| `Status` | `string` | Request status (`open`, `fulfilled`, `cancelled`) | `status` | `status` |
+| `CreatedAt` | `time.Time` | Creation timestamp (UTC) | `created_at` | `created_at` |
+| `UpdatedAt` | `time.Time` | Last update timestamp (UTC) | `updated_at` | `updated_at` |
+
+**Status Values:**
+- `open`: Request is active and awaiting matching donors (default on creation).
+- `fulfilled`: Request has been fulfilled with successful donation.
+- `cancelled`: Request is closed or no longer required.
+
+**Repository Methods (`internal/repositories/blood_request_repository.go`):**
+- `Create(ctx, req)`: Inserts a blood request, sets ObjectID, defaults empty status to `"open"`, and stamps UTC timestamps.
+- `List(ctx)`: Retrieves all requests; guarantees an empty slice `[]` rather than `null` when no records exist.
+- `FindByID(ctx, id)`: Fetches a single request by its hex ObjectID.
+
+**Sentinel Errors:**
+- `repositories.ErrBloodRequestNotFound`: Record with given ID does not exist.
+- `repositories.ErrInvalidBloodRequestID`: ID cannot be parsed as a 24-character hexadecimal ObjectID.
 
 ---
 
@@ -126,7 +160,7 @@ All API endpoints use the `/api` prefix and return standard JSON.
 
 ### 2. Create Donor
 - **Method & Path:** `POST /api/donors`
-- **Status Code:** `201 Created` on success, `400 Bad Request` on malformed JSON payload.
+- **Status Code:** `201 Created`
 - **Request Body Example:**
   ```json
   {
@@ -138,106 +172,24 @@ All API endpoints use the `/api` prefix and return standard JSON.
     "availability": true
   }
   ```
-- **Response Example (`201 Created`):**
-  ```json
-  {
-    "id": "6ad9288b33ace84ae4a82b8a",
-    "name": "Tanvir Hasan",
-    "email": "tanvir@example.com",
-    "phone": "+8801712345678",
-    "blood_group": "A+",
-    "city": "Dhaka",
-    "availability": true,
-    "created_at": "2026-10-22T03:03:07.123Z",
-    "updated_at": "2026-10-22T03:03:07.123Z"
-  }
-  ```
 
 ### 3. List All Donors
 - **Method & Path:** `GET /api/donors`
 - **Status Code:** `200 OK`
-- **Response Example:**
-  ```json
-  [
-    {
-      "id": "6ad9288b33ace84ae4a82b8a",
-      "name": "Tanvir Hasan",
-      "email": "tanvir@example.com",
-      "phone": "+8801712345678",
-      "blood_group": "A+",
-      "city": "Dhaka",
-      "availability": true,
-      "created_at": "2026-10-22T03:03:07.123Z",
-      "updated_at": "2026-10-22T03:03:07.123Z"
-    }
-  ]
-  ```
 
 ### 4. Get Donor by ID
 - **Method & Path:** `GET /api/donors/:id`
-- **Status Codes:**
-  - `200 OK`: Donor found.
-  - `400 Bad Request`: `:id` is not a valid 24-character hex MongoDB ObjectID.
-  - `404 Not Found`: No donor exists with the provided ID.
-- **Response Example (`200 OK`):**
-  ```json
-  {
-    "id": "6ad9288b33ace84ae4a82b8a",
-    "name": "Tanvir Hasan",
-    "email": "tanvir@example.com",
-    "phone": "+8801712345678",
-    "blood_group": "A+",
-    "city": "Dhaka",
-    "availability": true,
-    "created_at": "2026-10-22T03:03:07.123Z",
-    "updated_at": "2026-10-22T03:03:07.123Z"
-  }
-  ```
+- **Status Codes:** `200 OK`, `400 Bad Request`, `404 Not Found`
 
 ### 5. Update Donor
 - **Method & Path:** `PUT /api/donors/:id`
-- **Status Codes:**
-  - `200 OK`: Donor updated successfully.
-  - `400 Bad Request`: Invalid ID format or invalid JSON payload.
-  - `404 Not Found`: Donor does not exist.
-- **Request Body Example:**
-  ```json
-  {
-    "name": "Tanvir Hasan",
-    "email": "tanvir.new@example.com",
-    "phone": "+8801712345678",
-    "blood_group": "A+",
-    "city": "Sylhet",
-    "availability": false
-  }
-  ```
-- **Response Example (`200 OK`):**
-  ```json
-  {
-    "id": "6ad9288b33ace84ae4a82b8a",
-    "name": "Tanvir Hasan",
-    "email": "tanvir.new@example.com",
-    "phone": "+8801712345678",
-    "blood_group": "A+",
-    "city": "Sylhet",
-    "availability": false,
-    "created_at": "2026-10-22T03:03:07.123Z",
-    "updated_at": "2026-10-22T03:05:12.456Z"
-  }
-  ```
+- **Status Codes:** `200 OK`, `400 Bad Request`, `404 Not Found`
 
 ### 6. Delete Donor
 - **Method & Path:** `DELETE /api/donors/:id`
-- **Status Codes:**
-  - `200 OK`: Donor record deleted.
-  - `400 Bad Request`: Invalid ID format.
-  - `404 Not Found`: Donor not found.
-- **Response Example (`200 OK`):**
-  ```json
-  {
-    "message": "Donor deleted successfully"
-  }
-  ```
+- **Status Codes:** `200 OK`, `400 Bad Request`, `404 Not Found`
+
+*(HTTP handlers and endpoints for blood requests will be wired in the next milestone.)*
 
 ---
 
@@ -277,4 +229,4 @@ Run all unit and integration tests across the repository:
 ```powershell
 go test -v ./...
 ```
-*(Tests include route response validation, database connection lifecycle, model JSON deserialization, repository CRUD, and full handler HTTP tests covering status codes 200, 201, 400, and 404.)*
+*(Tests include route response validation, database connection lifecycle, model JSON deserialization, donor repository CRUD, donor HTTP handlers, and blood request repository operations.)*
