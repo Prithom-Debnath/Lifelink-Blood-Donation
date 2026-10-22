@@ -15,7 +15,7 @@ LifeLink is a lightweight, educational backend application built with **Go** and
 - [x] **Milestone 6: Input validation and standardized error handling**
 - [ ] Milestone 7: User registration and password hashing with bcrypt
 - [ ] Milestone 8: JWT authentication middleware for write operations
-- [ ] Milestone 9: Blood compatibility matching logic
+- [x] **Milestone 9: Blood compatibility matching logic**
 - [ ] Milestone 10: Minimal web frontend
 - [ ] Milestone 11: Final project cleanup and documentation review
 
@@ -35,7 +35,7 @@ The project uses a standard, beginner-friendly modular structure to separate con
 │   ├── database/           # MongoDB connection lifecycle, Ping reachability check, and cleanup
 │   ├── models/             # Data models (Donor, BloodRequest structs with BSON/JSON tags)
 │   ├── repositories/       # MongoDB data access layer (Donor and BloodRequest repositories)
-│   ├── handlers/           # HTTP controllers (Health, Donor, and Blood Request handlers)
+│   ├── handlers/           # HTTP controllers (Health, Donor, Blood Request, and Match handlers)
 │   ├── routes/             # Gin engine router setup, route grouping, and tests
 │   └── middleware/         # (Upcoming) Authentication and logging middleware
 ├── web/                    # (Upcoming) Simple static frontend files
@@ -304,6 +304,58 @@ All API endpoints use the `/api` prefix and return standard JSON.
     }
     ```
 
+### 10. Find Compatible Donors (Matching)
+- **Method & Path:** `GET /api/matches?bloodGroup=B+&city=Dhaka`
+- **Status Codes:** `200 OK`, `400 Bad Request`, `500 Internal Server Error`
+- **Query Parameters:**
+  - `bloodGroup` (or `blood_group`, **required**): Requested recipient blood group (e.g., `B+`, `O-`).
+  - `city` (*optional*): Case-insensitive filter for donor city (e.g., `Dhaka`).
+- **Description:** Returns a list of currently available donors (`availability: true`) whose blood group is medically compatible with the recipient.
+- **Educational Disclaimer:**
+  > [!NOTE]
+  > This is a simplified red blood cell compatibility matching algorithm built solely for educational purposes in the CSE 250 course project. It does **not** constitute medical guidance, clinical advice, or clinical protocol for blood transfusions. Real-world medical transfusions require cross-matching and extensive serological screening.
+- **Red Blood Cell Compatibility Reference Table:**
+  | Recipient Blood Group | Compatible Donor Blood Groups |
+  |---|---|
+  | `AB+` | `AB+`, `AB-`, `A+`, `A-`, `B+`, `B-`, `O+`, `O-` (Universal Recipient) |
+  | `AB-` | `AB-`, `A-`, `B-`, `O-` |
+  | `A+` | `A+`, `A-`, `O+`, `O-` |
+  | `A-` | `A-`, `O-` |
+  | `B+` | `B+`, `B-`, `O+`, `O-` |
+  | `B-` | `B-`, `O-` |
+  | `O+` | `O+`, `O-` |
+  | `O-` | `O-` (Universal Donor) |
+- **Response Example (200 OK):**
+  ```json
+  [
+    {
+      "id": "6717a0b5f5e27a14e9123456",
+      "name": "Nusrat Jahan",
+      "email": "nusrat@example.com",
+      "phone": "+8801819000000",
+      "blood_group": "B+",
+      "city": "Dhaka",
+      "availability": true,
+      "created_at": "2026-10-22T08:00:00Z",
+      "updated_at": "2026-10-22T08:00:00Z"
+    }
+  ]
+  ```
+  *(Returns `[]` empty JSON array when no compatible available donors match.)*
+- **Error Responses:**
+  - `400 Bad Request` (Missing blood group parameter):
+    ```json
+    {
+      "error": "bloodGroup query parameter is required"
+    }
+    ```
+  - `400 Bad Request` (Unsupported blood group):
+    ```json
+    {
+      "error": "invalid blood group: must be one of A+, A-, B+, B-, AB+, AB-, O+, O-"
+    }
+    ```
+
 ---
 
 ## Setup & Running
@@ -342,4 +394,4 @@ Run all unit and integration tests across the repository:
 ```powershell
 go test -v ./...
 ```
-*(Tests include route response validation, database connection lifecycle, model JSON deserialization, donor repository CRUD, donor HTTP handlers, blood request repository operations, blood request HTTP handlers, model validation methods, and HTTP input validation tests.)*
+*(Tests include route response validation, database connection lifecycle, model JSON deserialization, donor repository CRUD, donor HTTP handlers, blood request repository operations, blood request HTTP handlers, model validation methods, HTTP input validation tests, and blood compatibility matching logic.)*

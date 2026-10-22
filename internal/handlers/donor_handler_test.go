@@ -20,8 +20,9 @@ import (
 
 // mockDonorRepo is an in-memory mock implementation of repositories.DonorRepository for fast handler tests.
 type mockDonorRepo struct {
-	mu     sync.RWMutex
-	donors map[string]models.Donor
+	mu      sync.RWMutex
+	donors  map[string]models.Donor
+	listErr error
 }
 
 func newMockDonorRepo() *mockDonorRepo {
@@ -47,6 +48,10 @@ func (m *mockDonorRepo) Create(ctx context.Context, donor *models.Donor) error {
 func (m *mockDonorRepo) List(ctx context.Context) ([]models.Donor, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
+	if m.listErr != nil {
+		return nil, m.listErr
+	}
 
 	list := make([]models.Donor, 0, len(m.donors))
 	for _, d := range m.donors {

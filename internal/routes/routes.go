@@ -33,6 +33,10 @@ func SetupRouter(cfg *config.Config, donorRepo repositories.DonorRepository, req
 			api.GET("/donors/:id", donorHandler.GetDonorByID)
 			api.PUT("/donors/:id", donorHandler.UpdateDonor)
 			api.DELETE("/donors/:id", donorHandler.DeleteDonor)
+
+			// Register donor matching endpoint
+			matchHandler := handlers.NewMatchHandler(donorRepo)
+			api.GET("/matches", matchHandler.FindMatches)
 		}
 
 		// Register blood request endpoints if a repository is provided
