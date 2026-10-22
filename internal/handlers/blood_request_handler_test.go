@@ -377,3 +377,109 @@ func TestBloodRequestEndpoints_GetByIDDatabaseError(t *testing.T) {
 		t.Errorf("Expected status 500 Internal Server Error, got %d", w.Code)
 	}
 }
+
+func TestBloodRequestEndpoints_Validation(t *testing.T) {
+	repo := newMockBloodRequestRepo()
+	router := setupTestRouterWithRequestRepo(repo)
+
+	testValidation := func(t *testing.T, payload string, expectedError string) {
+		req, _ := http.NewRequest(http.MethodPost, "/api/requests", bytes.NewBufferString(payload))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status 400 Bad Request, got %d. Body: %s", w.Code, w.Body.String())
+		}
+
+		var resp map[string]string
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("Failed to parse JSON response: %v", err)
+		}
+		if resp["error"] != expectedError {
+			t.Errorf("Expected error '%s', got '%s'", expectedError, resp["error"])
+		}
+	}
+
+	// 1. Missing patient_name
+	testValidation(t, `{
+		"patient_name": "",
+		"blood_group": "A+",
+		"hospital": "Square Hospital",
+		"city": "Dhaka",
+		"contact_phone": "+8801700112233"
+	}`, "patient_name is required")
+
+	// 2. Missing blood_group
+	testValidation(t, `{
+		"patient_name": "Rahim",
+		"blood_group": "   ",
+		"hospital": "Square Hospital",
+		"city": "Dhaka",
+		"contact_phone": "+8801700112233"
+	}`, "blood_group is required")
+
+	// 3. Unsupported blood_group
+	testValidation(t, `{
+		"patient_name": "Rahim",
+		"blood_group": "C+",
+		"hospital": "Square Hospital",
+		"city": "Dhaka",
+		"contact_phone": "+8801700112233"
+	}`, "invalid blood group: must be one of A+, A-, B+, B-, AB+, AB-, O+, O-")
+
+	// 4. Missing hospital
+	testValidation(t, `{
+		"patient_name": "Rahim",
+		"blood_group": "O+",
+		"hospital": "",
+		"city": "Dhaka",
+		"contact_phone": "+8801700112233"
+	}`, "hospital is required")
+
+	// 5. Missing city
+	testValidation(t, `{
+		"patient_name": "Rahim",
+		"blood_group": "O+",
+		"hospital": "Square Hospital",
+		"city": "   ",
+		"contact_phone": "+8801700112233"
+	}`, "city is required")
+
+	// 6. Missing contact_phone
+	testValidation(t, `{
+		"patient_name": "Rahim",
+		"blood_group": "O+",
+		"hospital": "Square Hospital",
+		"city": "Dhaka",
+		"contact_phone": ""
+	}`, "contact_phone is required")
+
+	// 7. Invalid status
+	testValidation(t, `{
+		"patient_name": "Rahim",
+		"blood_group": "O+",
+		"hospital": "Square Hospital",
+		"city": "Dhaka",
+		"contact_phone": "+8801700112233",
+		"status": "pending"
+	}`, "invalid status: must be one of open, fulfilled, cancelled")
+
+	// 8. Valid status should succeed (201 Created)
+	validReq, _ := http.NewRequest(http.MethodPost, "/api/requests", bytes.NewBufferString(`{
+		"patient_name": "Rahim",
+		"blood_group": "O+",
+		"hospital": "Square Hospital",
+		"city": "Dhaka",
+		"contact_phone": "+8801700112233",
+		"status": "open"
+	}`))
+	validReq.Header.Set("Content-Type", "application/json")
+	wValid := httptest.NewRecorder()
+	router.ServeHTTP(wValid, validReq)
+
+	if wValid.Code != http.StatusCreated {
+		t.Errorf("Expected status 201 Created on valid status, got %d. Body: %s", wValid.Code, wValid.Body.String())
+	}
+}
+

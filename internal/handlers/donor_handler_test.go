@@ -255,3 +255,136 @@ func TestDonorEndpoints_CRUD(t *testing.T) {
 		t.Errorf("Expected status 404 on deleting already deleted donor, got %d", wDeleteAgain.Code)
 	}
 }
+
+func TestDonorEndpoints_Validation(t *testing.T) {
+	repo := newMockDonorRepo()
+	router := setupTestRouter(repo)
+
+	// Helper function to test POST /api/donors validation errors
+	testPostValidation := func(t *testing.T, payload string, expectedError string) {
+		req, _ := http.NewRequest(http.MethodPost, "/api/donors", bytes.NewBufferString(payload))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status 400 Bad Request, got %d. Body: %s", w.Code, w.Body.String())
+		}
+
+		var resp map[string]string
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("Failed to decode JSON response: %v", err)
+		}
+		if resp["error"] != expectedError {
+			t.Errorf("Expected error '%s', got '%s'", expectedError, resp["error"])
+		}
+	}
+
+	// 1. Missing name
+	testPostValidation(t, `{
+		"name": "",
+		"email": "user@example.com",
+		"phone": "+8801700000000",
+		"blood_group": "A+",
+		"city": "Dhaka"
+	}`, "name is required")
+
+	// 2. Missing email
+	testPostValidation(t, `{
+		"name": "User One",
+		"email": "   ",
+		"phone": "+8801700000000",
+		"blood_group": "A+",
+		"city": "Dhaka"
+	}`, "email is required")
+
+	// 3. Invalid email format
+	testPostValidation(t, `{
+		"name": "User One",
+		"email": "invalid-email-format",
+		"phone": "+8801700000000",
+		"blood_group": "A+",
+		"city": "Dhaka"
+	}`, "invalid email format")
+
+	// 4. Missing phone
+	testPostValidation(t, `{
+		"name": "User One",
+		"email": "user@example.com",
+		"phone": "",
+		"blood_group": "A+",
+		"city": "Dhaka"
+	}`, "phone is required")
+
+	// 5. Missing blood group
+	testPostValidation(t, `{
+		"name": "User One",
+		"email": "user@example.com",
+		"phone": "+8801700000000",
+		"blood_group": "",
+		"city": "Dhaka"
+	}`, "blood_group is required")
+
+	// 6. Unsupported blood group
+	testPostValidation(t, `{
+		"name": "User One",
+		"email": "user@example.com",
+		"phone": "+8801700000000",
+		"blood_group": "X+",
+		"city": "Dhaka"
+	}`, "invalid blood group: must be one of A+, A-, B+, B-, AB+, AB-, O+, O-")
+
+	// 7. Missing city
+	testPostValidation(t, `{
+		"name": "User One",
+		"email": "user@example.com",
+		"phone": "+8801700000000",
+		"blood_group": "A+",
+		"city": ""
+	}`, "city is required")
+
+	// 8. PUT /api/donors/:id validation - update with invalid email
+	// First insert a donor
+	d := &models.Donor{
+		Name:         "Valid Donor",
+		Email:        "valid@example.com",
+		Phone:        "+8801711223344",
+		BloodGroup:   "B+",
+		City:         "Dhaka",
+		Availability: true,
+	}
+	_ = repo.Create(context.Background(), d)
+	idHex := d.ID.Hex()
+
+	putReq, _ := http.NewRequest(http.MethodPut, "/api/donors/"+idHex, bytes.NewBufferString(`{
+		"name": "Valid Donor",
+		"email": "bad-email",
+		"phone": "+8801711223344",
+		"blood_group": "B+",
+		"city": "Dhaka"
+	}`))
+	putReq.Header.Set("Content-Type", "application/json")
+	wPut := httptest.NewRecorder()
+	router.ServeHTTP(wPut, putReq)
+
+	if wPut.Code != http.StatusBadRequest {
+		t.Errorf("Expected status 400 on PUT with invalid email, got %d", wPut.Code)
+	}
+
+	// 9. PUT /api/donors/:id validation - update with unsupported blood group
+	putReqBG, _ := http.NewRequest(http.MethodPut, "/api/donors/"+idHex, bytes.NewBufferString(`{
+		"name": "Valid Donor",
+		"email": "valid@example.com",
+		"phone": "+8801711223344",
+		"blood_group": "INVALID_BG",
+		"city": "Dhaka"
+	}`))
+	putReqBG.Header.Set("Content-Type", "application/json")
+	wPutBG := httptest.NewRecorder()
+	router.ServeHTTP(wPutBG, putReqBG)
+
+	if wPutBG.Code != http.StatusBadRequest {
+		t.Errorf("Expected status 400 on PUT with invalid blood group, got %d", wPutBG.Code)
+	}
+}
+

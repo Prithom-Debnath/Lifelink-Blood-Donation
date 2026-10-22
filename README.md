@@ -12,7 +12,7 @@ LifeLink is a lightweight, educational backend application built with **Go** and
 - [x] **Milestone 4: Donor CRUD endpoints**
 - [x] **Milestone 5 (Part 1): Blood request model and repository**
 - [x] **Milestone 5 (Part 2): Blood request HTTP endpoints**
-- [ ] Milestone 6: Input validation and standardized error handling
+- [x] **Milestone 6: Input validation and standardized error handling**
 - [ ] Milestone 7: User registration and password hashing with bcrypt
 - [ ] Milestone 8: JWT authentication middleware for write operations
 - [ ] Milestone 9: Blood compatibility matching logic
@@ -140,6 +140,35 @@ Represents urgent blood requests in MongoDB collection `blood_requests`:
 **Sentinel Errors:**
 - `repositories.ErrBloodRequestNotFound`: Record with given ID does not exist.
 - `repositories.ErrInvalidBloodRequestID`: ID cannot be parsed as a 24-character hexadecimal ObjectID.
+
+---
+
+## Input Validation Rules
+
+LifeLink enforces basic, consistent input validation across both Donor and Blood Request APIs:
+
+### 1. Donor Validation (`POST /api/donors`, `PUT /api/donors/:id`)
+- **`name`**: Required string (non-empty, non-whitespace).
+- **`email`**: Required string; must match standard email address format (e.g. `user@example.com`).
+- **`phone`**: Required string (non-empty).
+- **`blood_group`**: Required string; must be one of the 8 supported ABO/Rh groups: `A+`, `A-`, `B+`, `B-`, `AB+`, `AB-`, `O+`, `O-`.
+- **`city`**: Required string (non-empty).
+
+### 2. Blood Request Validation (`POST /api/requests`)
+- **`patient_name`**: Required string (non-empty).
+- **`blood_group`**: Required string; must be one of the 8 supported ABO/Rh groups: `A+`, `A-`, `B+`, `B-`, `AB+`, `AB-`, `O+`, `O-`.
+- **`hospital`**: Required string (non-empty).
+- **`city`**: Required string (non-empty).
+- **`contact_phone`**: Required string (non-empty).
+- **`status`**: Optional on creation (defaults to `open`); if provided, must be one of: `open`, `fulfilled`, `cancelled`.
+
+### 3. Standard Error Format
+When validation fails, the API responds with HTTP `400 Bad Request` and a clear error message in JSON:
+```json
+{
+  "error": "invalid blood group: must be one of A+, A-, B+, B-, AB+, AB-, O+, O-"
+}
+```
 
 ---
 
@@ -313,4 +342,4 @@ Run all unit and integration tests across the repository:
 ```powershell
 go test -v ./...
 ```
-*(Tests include route response validation, database connection lifecycle, model JSON deserialization, donor repository CRUD, donor HTTP handlers, blood request repository operations, and blood request HTTP handlers.)*
+*(Tests include route response validation, database connection lifecycle, model JSON deserialization, donor repository CRUD, donor HTTP handlers, blood request repository operations, blood request HTTP handlers, model validation methods, and HTTP input validation tests.)*

@@ -34,6 +34,14 @@ func (h *BloodRequestHandler) CreateBloodRequest(c *gin.Context) {
 		return
 	}
 
+	// Validate required fields, supported blood group, and allowed status
+	if err := req.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
 	// Persist the blood request record using the repository
 	if err := h.repo.Create(c.Request.Context(), &req); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{

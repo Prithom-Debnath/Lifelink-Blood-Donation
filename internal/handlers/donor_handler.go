@@ -34,6 +34,14 @@ func (h *DonorHandler) CreateDonor(c *gin.Context) {
 		return
 	}
 
+	// Validate required fields, email format, and supported blood group
+	if err := donor.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
 	// Persist the donor record using the repository
 	if err := h.repo.Create(c.Request.Context(), &donor); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -93,6 +101,14 @@ func (h *DonorHandler) UpdateDonor(c *gin.Context) {
 	if err := c.ShouldBindJSON(&donor); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Invalid request payload: " + err.Error(),
+		})
+		return
+	}
+
+	// Validate required fields, email format, and supported blood group
+	if err := donor.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
 		})
 		return
 	}

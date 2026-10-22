@@ -2,6 +2,8 @@ package models
 
 import (
 	"encoding/json"
+	"errors"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -54,5 +56,31 @@ func (r *BloodRequest) UnmarshalJSON(data []byte) error {
 		r.ContactPhone = aux.ContactPhoneCamel
 	}
 
+	return nil
+}
+
+// Validate checks for required fields, supported blood groups, and allowed statuses.
+func (r *BloodRequest) Validate() error {
+	if strings.TrimSpace(r.PatientName) == "" {
+		return errors.New("patient_name is required")
+	}
+	if strings.TrimSpace(r.BloodGroup) == "" {
+		return errors.New("blood_group is required")
+	}
+	if !IsValidBloodGroup(r.BloodGroup) {
+		return errors.New("invalid blood group: must be one of A+, A-, B+, B-, AB+, AB-, O+, O-")
+	}
+	if strings.TrimSpace(r.Hospital) == "" {
+		return errors.New("hospital is required")
+	}
+	if strings.TrimSpace(r.City) == "" {
+		return errors.New("city is required")
+	}
+	if strings.TrimSpace(r.ContactPhone) == "" {
+		return errors.New("contact_phone is required")
+	}
+	if strings.TrimSpace(r.Status) != "" && !IsValidStatus(r.Status) {
+		return errors.New("invalid status: must be one of open, fulfilled, cancelled")
+	}
 	return nil
 }
