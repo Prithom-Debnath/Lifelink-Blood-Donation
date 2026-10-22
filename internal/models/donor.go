@@ -18,6 +18,9 @@ type Donor struct {
 	BloodGroup   string        `bson:"blood_group" json:"blood_group"`
 	City         string        `bson:"city" json:"city"`
 	Availability bool          `bson:"availability" json:"availability"`
+	Latitude     *float64      `bson:"latitude,omitempty" json:"latitude,omitempty"`
+	Longitude    *float64      `bson:"longitude,omitempty" json:"longitude,omitempty"`
+	DistanceKm   *float64      `bson:"-" json:"distance_km,omitempty"`
 	CreatedAt    time.Time     `bson:"created_at" json:"created_at"`
 	UpdatedAt    time.Time     `bson:"updated_at" json:"updated_at"`
 }
@@ -44,7 +47,7 @@ func (d *Donor) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// Validate checks for required fields, valid email format, and supported blood groups.
+// Validate checks for required fields, valid email format, supported blood groups, and valid coordinates.
 func (d *Donor) Validate() error {
 	if strings.TrimSpace(d.Name) == "" {
 		return errors.New("name is required")
@@ -66,6 +69,9 @@ func (d *Donor) Validate() error {
 	}
 	if strings.TrimSpace(d.City) == "" {
 		return errors.New("city is required")
+	}
+	if !IsValidCoordinates(d.Latitude, d.Longitude) {
+		return errors.New("invalid coordinates: latitude must be between -90 and 90, longitude between -180 and 180")
 	}
 	return nil
 }

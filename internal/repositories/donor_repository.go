@@ -120,6 +120,8 @@ func (r *MongoDonorRepository) Update(ctx context.Context, id string, donor *mod
 			"blood_group":  donor.BloodGroup,
 			"city":         donor.City,
 			"availability": donor.Availability,
+			"latitude":     donor.Latitude,
+			"longitude":    donor.Longitude,
 			"updated_at":   donor.UpdatedAt,
 		},
 	}

@@ -29,9 +29,10 @@ func main() {
 	// 3. Initialize repositories
 	donorRepo := repositories.NewDonorRepository(db.Database)
 	requestRepo := repositories.NewBloodRequestRepository(db.Database)
+	userRepo := repositories.NewUserRepository(db.Database)
 
 	// 4. Initialize HTTP router with routes and middleware
-	router := routes.SetupRouter(cfg, donorRepo, requestRepo)
+	router := routes.SetupRouter(cfg, donorRepo, requestRepo, userRepo)
 
 	// 5. Configure the HTTP server
 	addr := ":" + cfg.Port

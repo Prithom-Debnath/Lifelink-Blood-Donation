@@ -25,6 +25,9 @@ type BloodRequest struct {
 	City         string        `bson:"city" json:"city"`
 	ContactPhone string        `bson:"contact_phone" json:"contact_phone"`
 	Status       string        `bson:"status" json:"status"`
+	Urgency      string        `bson:"urgency" json:"urgency"`
+	Latitude     *float64      `bson:"latitude,omitempty" json:"latitude,omitempty"`
+	Longitude    *float64      `bson:"longitude,omitempty" json:"longitude,omitempty"`
 	CreatedAt    time.Time     `bson:"created_at" json:"created_at"`
 	UpdatedAt    time.Time     `bson:"updated_at" json:"updated_at"`
 }
@@ -59,7 +62,7 @@ func (r *BloodRequest) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// Validate checks for required fields, supported blood groups, and allowed statuses.
+// Validate checks for required fields, supported blood groups, allowed statuses, urgency, and valid coordinates.
 func (r *BloodRequest) Validate() error {
 	if strings.TrimSpace(r.PatientName) == "" {
 		return errors.New("patient_name is required")
@@ -81,6 +84,12 @@ func (r *BloodRequest) Validate() error {
 	}
 	if strings.TrimSpace(r.Status) != "" && !IsValidStatus(r.Status) {
 		return errors.New("invalid status: must be one of open, fulfilled, cancelled")
+	}
+	if strings.TrimSpace(r.Urgency) != "" && !IsValidUrgency(r.Urgency) {
+		return errors.New("invalid urgency: must be one of normal, urgent, critical")
+	}
+	if !IsValidCoordinates(r.Latitude, r.Longitude) {
+		return errors.New("invalid coordinates: latitude must be between -90 and 90, longitude between -180 and 180")
 	}
 	return nil
 }

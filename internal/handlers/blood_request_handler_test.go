@@ -97,7 +97,7 @@ func setupTestRouterWithRequestRepo(repo repositories.BloodRequestRepository) ht
 		Port:   "8080",
 		AppEnv: "test",
 	}
-	return routes.SetupRouter(cfg, nil, repo)
+	return routes.SetupRouter(cfg, nil, repo, nil)
 }
 
 func TestBloodRequestEndpoints_CreateSuccess(t *testing.T) {
@@ -482,4 +482,106 @@ func TestBloodRequestEndpoints_Validation(t *testing.T) {
 		t.Errorf("Expected status 201 Created on valid status, got %d. Body: %s", wValid.Code, wValid.Body.String())
 	}
 }
+
+func TestBloodRequestEndpoints_UrgencyAndCoordinates(t *testing.T) {
+	repo := newMockBloodRequestRepo()
+	router := setupTestRouterWithRequestRepo(repo)
+
+	// 1. Create request with critical urgency and coordinates
+	payload := `{
+		"patient_name": "Emergency Patient",
+		"blood_group": "AB-",
+		"hospital": "Evercare Hospital",
+		"city": "Dhaka",
+		"contact_phone": "+8801799887766",
+		"urgency": "critical",
+		"latitude": 23.8103,
+		"longitude": 90.4125
+	}`
+	req, _ := http.NewRequest(http.MethodPost, "/api/requests", bytes.NewBufferString(payload))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("Expected 201 Created, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var created models.BloodRequest
+	_ = json.Unmarshal(w.Body.Bytes(), &created)
+	if created.Urgency != "critical" {
+		t.Errorf("Expected urgency 'critical', got '%s'", created.Urgency)
+	}
+	if created.Latitude == nil || *created.Latitude != 23.8103 {
+		t.Errorf("Expected latitude 23.8103, got %v", created.Latitude)
+	}
+	if created.Longitude == nil || *created.Longitude != 90.4125 {
+		t.Errorf("Expected longitude 90.4125, got %v", created.Longitude)
+	}
+
+	// 2. Create requests with different urgencies for filter & sort tests
+	_ = repo.Create(context.Background(), &models.BloodRequest{
+		PatientName:  "Patient Normal",
+		BloodGroup:   "O+",
+		Hospital:     "Hospital A",
+		City:         "Dhaka",
+		ContactPhone: "+8801700000001",
+		Urgency:      "normal",
+	})
+	_ = repo.Create(context.Background(), &models.BloodRequest{
+		PatientName:  "Patient Urgent",
+		BloodGroup:   "O+",
+		Hospital:     "Hospital B",
+		City:         "Dhaka",
+		ContactPhone: "+8801700000002",
+		Urgency:      "urgent",
+	})
+
+	// 3. Test filter by urgency: GET /api/requests?urgency=critical
+	{
+		filterReq, _ := http.NewRequest(http.MethodGet, "/api/requests?urgency=critical", nil)
+		filterW := httptest.NewRecorder()
+		router.ServeHTTP(filterW, filterReq)
+
+		if filterW.Code != http.StatusOK {
+			t.Fatalf("Expected 200 OK on urgency filter, got %d", filterW.Code)
+		}
+
+		var list []models.BloodRequest
+		_ = json.Unmarshal(filterW.Body.Bytes(), &list)
+		if len(list) != 1 {
+			t.Fatalf("Expected 1 critical request, got %d", len(list))
+		}
+		if list[0].PatientName != "Emergency Patient" {
+			t.Errorf("Expected 'Emergency Patient', got '%s'", list[0].PatientName)
+		}
+	}
+
+	// 4. Test sort by urgency: GET /api/requests?sort=urgency (Critical > Urgent > Normal)
+	{
+		sortReq, _ := http.NewRequest(http.MethodGet, "/api/requests?sort=urgency", nil)
+		sortW := httptest.NewRecorder()
+		router.ServeHTTP(sortW, sortReq)
+
+		if sortW.Code != http.StatusOK {
+			t.Fatalf("Expected 200 OK on urgency sort, got %d", sortW.Code)
+		}
+
+		var list []models.BloodRequest
+		_ = json.Unmarshal(sortW.Body.Bytes(), &list)
+		if len(list) != 3 {
+			t.Fatalf("Expected 3 requests, got %d", len(list))
+		}
+		if list[0].Urgency != "critical" {
+			t.Errorf("Expected first request to be critical, got '%s'", list[0].Urgency)
+		}
+		if list[1].Urgency != "urgent" {
+			t.Errorf("Expected second request to be urgent, got '%s'", list[1].Urgency)
+		}
+		if list[2].Urgency != "normal" {
+			t.Errorf("Expected third request to be normal, got '%s'", list[2].Urgency)
+		}
+	}
+}
+
 

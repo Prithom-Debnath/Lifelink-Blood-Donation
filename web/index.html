@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LifeLink — Blood Donation Management</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-container">
+      <div class="header-branding">
+        <h1>LifeLink</h1>
+        <p class="subtitle">Here we are to find blood to help each other</p>
+      </div>
+      <div class="header-auth" id="header-auth-bar">
+        <span class="auth-status-indicator" id="header-user-status" hidden></span>
+        <button type="button" class="btn btn-sm btn-outline" id="header-auth-btn">Sign In / Register</button>
+      </div>
+    </div>
+    <nav class="top-navigation" id="top-navigation" aria-label="Main navigation">
+      <a href="#sign-in" data-page-route="sign-in" data-target-page="account" data-auth-tab="login">Sign In</a>
+      <a href="#create-account" data-page-route="create-account" data-target-page="account" data-auth-tab="register">Create Account</a>
+      <a href="#my-profile" data-page-route="my-profile" data-target-page="account" data-auth-tab="profile">My Profile</a>
+      <a href="#find-donors" data-page-route="find-donors" data-target-page="find-donors">Find Donors</a>
+      <a href="#register-donor" data-page-route="register-donor" data-target-page="register-donor">Register Volunteer Blood Donor</a>
+      <a href="#registered-donors" data-page-route="registered-donors" data-target-page="registered-donors">Registered Donors</a>
+      <a href="#submit-request" data-page-route="submit-request" data-target-page="submit-request">Submit Blood Request</a>
+      <a href="#active-requests" data-page-route="active-requests" data-target-page="active-requests">Active Blood Requests</a>
+    </nav>
+  </header>
+
+  <main class="main-container">
+    <!-- SECTION 1: User Account Portal (Registration, Login, Profile) -->
+    <section class="card auth-section" id="auth-section" data-page-view="account" hidden>
+      <div class="section-header-row">
+        <div>
+          <h2>User Account Portal</h2>
+          <p class="section-desc">Create or sign in to your personal LifeLink account to manage your profile.</p>
+        </div>
+        <div class="auth-mode-indicator">
+          <span class="badge badge-guest" id="auth-badge">Guest</span>
+        </div>
+      </div>
+
+      <!-- Critical Distinction Banner: User Account vs. Volunteer Blood Donor -->
+      <div class="distinction-banner" id="distinction-banner">
+        <span class="banner-icon">ℹ️</span>
+        <div>
+          <strong>Important Distinction:</strong> 
+          Creating a <em>User Account</em> here provides system credentials (email/password) and personal authentication.
+          If you want to register as an active <em>Blood Donor</em> (recording your blood group, typed location, and donation availability for recipients), choose <strong>Register Volunteer Blood Donor</strong> from the top menu.
+        </div>
+      </div>
+
+      <!-- Tab Pane 1: User Login -->
+      <div class="auth-pane active" id="pane-login" role="tabpanel">
+        <form id="login-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="login-email">Account Email *</label>
+              <input type="email" id="login-email" placeholder="e.g. user@example.com" required autocomplete="username">
+            </div>
+            <div class="form-group">
+              <label for="login-password">Password *</label>
+              <input type="password" id="login-password" placeholder="Enter your password" required autocomplete="current-password">
+            </div>
+            <div class="form-group form-actions">
+              <button type="submit" class="btn btn-primary" id="login-btn">Sign In</button>
+            </div>
+          </div>
+        </form>
+        <div id="login-feedback" class="feedback-msg"></div>
+      </div>
+
+      <!-- Tab Pane 2: User Account Registration -->
+      <div class="auth-pane" id="pane-register" role="tabpanel" style="display: none;">
+        <form id="register-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="reg-name">Your Full Name *</label>
+              <input type="text" id="reg-name" placeholder="e.g. Amiyo Das" required autocomplete="name">
+            </div>
+            <div class="form-group">
+              <label for="reg-email">Account Email *</label>
+              <input type="email" id="reg-email" placeholder="e.g. amina@example.com" required autocomplete="email">
+            </div>
+            <div class="form-group">
+              <label for="reg-password">Password (min 6 characters) *</label>
+              <input type="password" id="reg-password" placeholder="Create a secure password" minlength="6" required autocomplete="new-password">
+            </div>
+            <div class="form-group form-actions">
+              <button type="submit" class="btn btn-success" id="register-btn">Create Account</button>
+            </div>
+          </div>
+        </form>
+        <div id="register-feedback" class="feedback-msg"></div>
+      </div>
+
+      <!-- Tab Pane 3: Profile View (Shown When Signed In) -->
+      <div class="auth-pane" id="pane-profile" role="tabpanel" style="display: none;">
+        <p class="profile-login-required" id="profile-login-required" hidden>Please sign in to view your profile.</p>
+        <div class="profile-card" id="profile-card" hidden>
+          <div class="profile-header">
+            <div class="profile-avatar">👤</div>
+            <div>
+              <h3 id="profile-name">User Name</h3>
+              <p class="profile-subtitle">LifeLink Registered Member</p>
+            </div>
+            <div class="profile-status">
+              <span class="badge badge-available">Authenticated</span>
+            </div>
+          </div>
+
+          <div class="profile-details-grid">
+            <div class="profile-item">
+              <span class="profile-item-label">Email Address</span>
+              <span class="profile-item-value" id="profile-email">—</span>
+            </div>
+            <div class="profile-item">
+              <span class="profile-item-label">User Account ID</span>
+              <span class="profile-item-value"><code id="profile-id">—</code></span>
+            </div>
+            <div class="profile-item">
+              <span class="profile-item-label">Member Since</span>
+              <span class="profile-item-value" id="profile-created">—</span>
+            </div>
+          </div>
+
+          <div class="profile-footer">
+            <button type="button" class="btn btn-secondary" id="logout-btn">Log Out</button>
+          </div>
+        </div>
+        <div id="profile-feedback" class="feedback-msg"></div>
+      </div>
+    </section>
+
+    <!-- SECTION 2: Compatibility Matching & Nearby Emergency Search -->
+    <section class="card match-section" id="match-section" data-page-view="find-donors" hidden>
+      <div class="section-header-row">
+        <div>
+          <h2>Find Compatible Donors</h2>
+          <p class="section-desc">Search for available donors by blood group and the city or area you type.</p>
+        </div>
+      </div>
+
+      <form id="match-form">
+        <div class="form-row">
+          <div class="form-group" style="max-width: 220px;">
+            <label for="match-blood-group">Recipient Blood Group *</label>
+            <select id="match-blood-group" required>
+              <option value="">-- Select Group --</option>
+              <option value="A+">A+</option>
+              <option value="A-">A-</option>
+              <option value="B+">B+</option>
+              <option value="B-">B-</option>
+              <option value="AB+">AB+</option>
+              <option value="AB-">AB-</option>
+              <option value="O+">O+</option>
+              <option value="O-">O-</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="match-city">Location (City / Area)</label>
+            <input type="text" id="match-city" placeholder="e.g. Dhanmondi, Dhaka">
+            <small class="form-help">Type the area and city to find donors who listed a matching location.</small>
+          </div>
+
+          <div class="form-group form-actions">
+            <button type="submit" class="btn btn-primary" id="find-matches-btn">Find Matches</button>
+          </div>
+        </div>
+      </form>
+
+      <div id="match-feedback" class="feedback-msg"></div>
+
+      <div class="table-container">
+        <table class="data-table" id="matches-table">
+          <thead>
+            <tr>
+              <th>Donor Name</th>
+              <th>Blood Group</th>
+              <th>City</th>
+              <th>Phone</th>
+              <th>Email</th>
+              <th>Availability</th>
+            </tr>
+          </thead>
+          <tbody id="matches-tbody">
+            <tr>
+              <td colspan="6" class="text-center text-muted">Select a blood group and type a city or area to find compatible donors.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- SECTION 3: Volunteer Donors Management -->
+    <div class="grid-two-columns page-view-wrapper">
+      <section class="card" data-page-view="register-donor" hidden>
+        <h2>Register Volunteer Blood Donor</h2>
+        <p class="section-desc">Add a volunteer donor with blood group and typed city or area. <em>(Distinct from user account login)</em>.</p>
+        
+        <form id="donor-form">
+          <div class="form-group">
+            <label for="donor-name">Donor Full Name *</label>
+            <input type="text" id="donor-name" placeholder="e.g. Nusrat Jahan" required>
+          </div>
+
+          <div class="form-group">
+            <label for="donor-email">Donor Email Address *</label>
+            <input type="email" id="donor-email" placeholder="e.g. nusrat@example.com" required>
+          </div>
+
+          <div class="form-group">
+            <label for="donor-phone">Contact Phone Number *</label>
+            <input type="text" id="donor-phone" placeholder="e.g. +8801819000000" required>
+          </div>
+
+          <div class="form-group">
+            <label for="donor-blood-group">Blood Group *</label>
+            <select id="donor-blood-group" required>
+              <option value="">-- Select Blood Group --</option>
+              <option value="A+">A+</option>
+              <option value="A-">A-</option>
+              <option value="B+">B+</option>
+              <option value="B-">B-</option>
+              <option value="AB+">AB+</option>
+              <option value="AB-">AB-</option>
+              <option value="O+">O+</option>
+              <option value="O-">O-</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="donor-city">Location (Area, City) *</label>
+            <input type="text" id="donor-city" placeholder="e.g. Dhanmondi, Dhaka" required>
+          </div>
+
+          <div class="form-group checkbox-group">
+            <label>
+              <input type="checkbox" id="donor-availability" checked>
+              Currently available to donate
+            </label>
+          </div>
+
+          <button type="submit" class="btn btn-success" id="donor-submit-btn">Register Volunteer Donor</button>
+          <div id="donor-form-feedback" class="feedback-msg"></div>
+        </form>
+      </section>
+
+      <section class="card" data-page-view="registered-donors" hidden>
+        <div class="section-header-row">
+          <h2>Registered Donors</h2>
+          <button id="refresh-donors-btn" class="btn btn-secondary btn-sm">Refresh List</button>
+        </div>
+        <p class="section-desc">Active donor directory loaded from <code>/api/donors</code>.</p>
+
+        <div class="table-container scrollable-table">
+          <table class="data-table" id="donors-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Blood</th>
+                <th>Location</th>
+                <th>Contact</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="donors-tbody">
+              <tr>
+                <td colspan="5" class="text-center text-muted">Loading donors...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- SECTION 4: Blood Requests Management -->
+    <div class="grid-two-columns page-view-wrapper">
+      <section class="card" data-page-view="submit-request" hidden>
+        <h2>Submit Blood Request</h2>
+        <p class="section-desc">Create an urgent patient request for blood donation with urgency level and location.</p>
+
+        <form id="request-form">
+          <div class="form-group">
+            <label for="req-patient-name">Patient Name *</label>
+            <input type="text" id="req-patient-name" placeholder="e.g. Rahim Uddin" required>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="req-blood-group">Required Blood Group *</label>
+              <select id="req-blood-group" required>
+                <option value="">-- Select Blood Group --</option>
+                <option value="A+">A+</option>
+                <option value="A-">A-</option>
+                <option value="B+">B+</option>
+                <option value="B-">B-</option>
+                <option value="AB+">AB+</option>
+                <option value="AB-">AB-</option>
+                <option value="O+">O+</option>
+                <option value="O-">O-</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="req-urgency">Urgency Level *</label>
+              <select id="req-urgency" required>
+                <option value="normal" selected>Normal</option>
+                <option value="urgent">Urgent</option>
+                <option value="critical">Critical</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="req-hospital">Hospital Name *</label>
+            <input type="text" id="req-hospital" placeholder="e.g. Dhaka Medical College Hospital" required>
+          </div>
+
+          <div class="form-group">
+            <label for="req-city">Location (Area, City) *</label>
+            <input type="text" id="req-city" placeholder="e.g. Dhanmondi, Dhaka" required>
+          </div>
+
+          <div class="form-group">
+            <label for="req-contact-phone">Emergency Contact Phone *</label>
+            <input type="text" id="req-contact-phone" placeholder="e.g. +8801711223344" required>
+          </div>
+
+          <div class="form-group">
+            <label for="req-status">Initial Status</label>
+            <select id="req-status">
+              <option value="open" selected>open (Default)</option>
+              <option value="fulfilled">fulfilled</option>
+              <option value="cancelled">cancelled</option>
+            </select>
+          </div>
+
+          <button type="submit" class="btn btn-danger" id="req-submit-btn">Submit Request</button>
+          <div id="request-form-feedback" class="feedback-msg"></div>
+        </form>
+      </section>
+
+      <section class="card" data-page-view="active-requests" hidden>
+        <div class="section-header-row">
+          <h2>Active Blood Requests</h2>
+          <button id="refresh-requests-btn" class="btn btn-secondary btn-sm">Refresh List</button>
+        </div>
+        <p class="section-desc">Patient requests loaded from <code>/api/requests</code>.</p>
+
+        <!-- Requests Filtering and Sorting Toolbar -->
+        <div class="table-toolbar">
+          <div class="toolbar-item">
+            <label for="filter-urgency">Urgency:</label>
+            <select id="filter-urgency">
+              <option value="">All Urgencies</option>
+              <option value="critical">Critical</option>
+              <option value="urgent">Urgent</option>
+              <option value="normal">Normal</option>
+            </select>
+          </div>
+          <div class="toolbar-item">
+            <label for="sort-requests">Sort by:</label>
+            <select id="sort-requests">
+              <option value="newest">Newest First</option>
+              <option value="urgency">Highest Urgency (Critical &gt; Urgent &gt; Normal)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="table-container scrollable-table">
+          <table class="data-table" id="requests-table">
+            <thead>
+              <tr>
+                <th>Patient</th>
+                <th>Blood</th>
+                <th>Urgency</th>
+                <th>Hospital &amp; City</th>
+                <th>Contact</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="requests-tbody">
+              <tr>
+                <td colspan="6" class="text-center text-muted">Loading requests...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="app-footer">
+    <p>Thanks for your contribution</p>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -304,3 +304,110 @@ func TestMatchEndpoints_DatabaseError(t *testing.T) {
 		t.Errorf("Expected status 500 Internal Server Error, got %d", w.Code)
 	}
 }
+
+func TestMatchEndpoints_GeospatialRadiusFilter(t *testing.T) {
+	repo := newMockDonorRepo()
+	router := setupTestRouter(repo)
+
+	// Donor 1: Gulshan (23.7925, 90.4078) -> ~2.5 km from Banani
+	lat1, lng1 := 23.7925, 90.4078
+	_ = repo.Create(context.Background(), &models.Donor{
+		Name:         "Nearby Donor Gulshan",
+		Email:        "gulshan@example.com",
+		Phone:        "+8801700000001",
+		BloodGroup:   "O+",
+		City:         "Dhaka",
+		Availability: true,
+		Latitude:     &lat1,
+		Longitude:    &lng1,
+	})
+
+	// Donor 2: Dhanmondi (23.7465, 90.3760) -> ~7.5 km from Banani
+	lat2, lng2 := 23.7465, 90.3760
+	_ = repo.Create(context.Background(), &models.Donor{
+		Name:         "Medium Donor Dhanmondi",
+		Email:        "dhanmondi@example.com",
+		Phone:        "+8801700000002",
+		BloodGroup:   "O+",
+		City:         "Dhaka",
+		Availability: true,
+		Latitude:     &lat2,
+		Longitude:    &lng2,
+	})
+
+	// Donor 3: Chittagong (22.3569, 91.7832) -> ~215 km from Banani
+	lat3, lng3 := 22.3569, 91.7832
+	_ = repo.Create(context.Background(), &models.Donor{
+		Name:         "Far Donor Chittagong",
+		Email:        "chittagong@example.com",
+		Phone:        "+8801700000003",
+		BloodGroup:   "O+",
+		City:         "Chittagong",
+		Availability: true,
+		Latitude:     &lat3,
+		Longitude:    &lng3,
+	})
+
+	// Search from Banani (23.7937, 90.4043) with radius = 5 km
+	// Should only find Donor 1 (Gulshan)
+	{
+		req, _ := http.NewRequest(http.MethodGet, "/api/matches?bloodGroup=O+&lat=23.7937&lng=90.4043&radius=5", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("Expected 200 OK, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var matches []models.Donor
+		_ = json.Unmarshal(w.Body.Bytes(), &matches)
+		if len(matches) != 1 {
+			t.Fatalf("Expected 1 match within 5 km, got %d", len(matches))
+		}
+		if matches[0].Name != "Nearby Donor Gulshan" {
+			t.Errorf("Expected 'Nearby Donor Gulshan', got '%s'", matches[0].Name)
+		}
+		if matches[0].DistanceKm == nil || *matches[0].DistanceKm > 5.0 {
+			t.Errorf("Expected valid distance <= 5 km, got %v", matches[0].DistanceKm)
+		}
+	}
+
+	// Search from Banani with radius = 10 km
+	// Should find Donor 1 (Gulshan) and Donor 2 (Dhanmondi), sorted closest first
+	{
+		req, _ := http.NewRequest(http.MethodGet, "/api/matches?bloodGroup=O+&lat=23.7937&lng=90.4043&radius=10", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("Expected 200 OK, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var matches []models.Donor
+		_ = json.Unmarshal(w.Body.Bytes(), &matches)
+		if len(matches) != 2 {
+			t.Fatalf("Expected 2 matches within 10 km, got %d", len(matches))
+		}
+		// Verify closest first
+		if matches[0].Name != "Nearby Donor Gulshan" || matches[1].Name != "Medium Donor Dhanmondi" {
+			t.Errorf("Expected sorted by distance: Gulshan first, Dhanmondi second. Got: %s, %s", matches[0].Name, matches[1].Name)
+		}
+		if *matches[0].DistanceKm > *matches[1].DistanceKm {
+			t.Errorf("Expected distance sorting ascending: %f > %f", *matches[0].DistanceKm, *matches[1].DistanceKm)
+		}
+	}
+}
+
+func TestMatchEndpoints_InvalidCoordinates(t *testing.T) {
+	repo := newMockDonorRepo()
+	router := setupTestRouter(repo)
+
+	req, _ := http.NewRequest(http.MethodGet, "/api/matches?bloodGroup=A+&lat=999&lng=90.0", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected 400 Bad Request for invalid coordinates, got %d", w.Code)
+	}
+}
+

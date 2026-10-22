@@ -54,6 +54,12 @@ func (r *MongoBloodRequestRepository) Create(ctx context.Context, req *models.Bl
 		req.Status = models.StatusOpen
 	}
 
+	if req.Urgency == "" {
+		req.Urgency = models.UrgencyNormal
+	} else {
+		req.Urgency = models.NormalizeUrgency(req.Urgency)
+	}
+
 	now := time.Now().UTC()
 	if req.CreatedAt.IsZero() {
 		req.CreatedAt = now

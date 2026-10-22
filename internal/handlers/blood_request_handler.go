@@ -3,6 +3,8 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"sort"
+	"strings"
 
 	"lifelink/internal/models"
 	"lifelink/internal/repositories"
@@ -34,7 +36,14 @@ func (h *BloodRequestHandler) CreateBloodRequest(c *gin.Context) {
 		return
 	}
 
-	// Validate required fields, supported blood group, and allowed status
+	// Default urgency to "normal" if omitted
+	if strings.TrimSpace(req.Urgency) == "" {
+		req.Urgency = models.UrgencyNormal
+	} else {
+		req.Urgency = models.NormalizeUrgency(req.Urgency)
+	}
+
+	// Validate required fields, supported blood group, allowed status, and valid coordinates
 	if err := req.Validate(); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
@@ -59,6 +68,7 @@ func (h *BloodRequestHandler) CreateRequest(c *gin.Context) {
 }
 
 // ListBloodRequests handles GET /api/requests to retrieve all blood requests.
+// Supports optional filtering by urgency (?urgency=critical) and sorting (?sort=urgency).
 func (h *BloodRequestHandler) ListBloodRequests(c *gin.Context) {
 	requests, err := h.repo.List(c.Request.Context())
 	if err != nil {
@@ -66,6 +76,46 @@ func (h *BloodRequestHandler) ListBloodRequests(c *gin.Context) {
 			"error": "Failed to retrieve blood requests",
 		})
 		return
+	}
+
+	// Filter by urgency if requested
+	urgencyFilter := strings.ToLower(strings.TrimSpace(c.Query("urgency")))
+	if urgencyFilter != "" && models.IsValidUrgency(urgencyFilter) {
+		filtered := make([]models.BloodRequest, 0)
+		for _, r := range requests {
+			if strings.EqualFold(r.Urgency, urgencyFilter) {
+				filtered = append(filtered, r)
+			}
+		}
+		requests = filtered
+	}
+
+	// Sort by urgency if requested (Critical > Urgent > Normal)
+	sortParam := strings.ToLower(strings.TrimSpace(c.Query("sort")))
+	if sortParam == "" {
+		sortParam = strings.ToLower(strings.TrimSpace(c.Query("sortBy")))
+	}
+
+	if sortParam == "urgency" {
+		urgencyWeight := func(u string) int {
+			switch strings.ToLower(strings.TrimSpace(u)) {
+			case models.UrgencyCritical:
+				return 3
+			case models.UrgencyUrgent:
+				return 2
+			default:
+				return 1
+			}
+		}
+
+		sort.SliceStable(requests, func(i, j int) bool {
+			wi := urgencyWeight(requests[i].Urgency)
+			wj := urgencyWeight(requests[j].Urgency)
+			if wi != wj {
+				return wi > wj // higher urgency first
+			}
+			return requests[i].CreatedAt.After(requests[j].CreatedAt)
+		})
 	}
 
 	c.JSON(http.StatusOK, requests)

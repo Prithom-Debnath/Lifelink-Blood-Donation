@@ -219,3 +219,80 @@ func TestBloodRequest_Validate(t *testing.T) {
 		t.Errorf("Expected invalid status error, got: %v", err)
 	}
 }
+
+func TestIsValidUrgency(t *testing.T) {
+	valid := []string{"normal", "urgent", "critical", "Normal", "URGENT", "Critical"}
+	for _, u := range valid {
+		if !models.IsValidUrgency(u) {
+			t.Errorf("Expected urgency '%s' to be valid", u)
+		}
+	}
+
+	invalid := []string{"low", "high", "asap", "", " "}
+	for _, u := range invalid {
+		if models.IsValidUrgency(u) {
+			t.Errorf("Expected urgency '%s' to be invalid", u)
+		}
+	}
+
+	if models.NormalizeUrgency("") != models.UrgencyNormal {
+		t.Errorf("Expected empty urgency to normalize to 'normal'")
+	}
+	if models.NormalizeUrgency("Critical") != "critical" {
+		t.Errorf("Expected 'Critical' to normalize to 'critical'")
+	}
+}
+
+func TestIsValidCoordinates(t *testing.T) {
+	lat := 23.8103
+	lng := 90.4125
+	invalidLat := 95.0
+	invalidLng := 190.0
+
+	// Both nil is valid (optional)
+	if !models.IsValidCoordinates(nil, nil) {
+		t.Errorf("Expected (nil, nil) coordinates to be valid")
+	}
+
+	// Both valid
+	if !models.IsValidCoordinates(&lat, &lng) {
+		t.Errorf("Expected valid coordinates to pass")
+	}
+
+	// Only one nil
+	if models.IsValidCoordinates(&lat, nil) {
+		t.Errorf("Expected (lat, nil) to be invalid")
+	}
+	if models.IsValidCoordinates(nil, &lng) {
+		t.Errorf("Expected (nil, lng) to be invalid")
+	}
+
+	// Out of bounds
+	if models.IsValidCoordinates(&invalidLat, &lng) {
+		t.Errorf("Expected out of bound lat to be invalid")
+	}
+	if models.IsValidCoordinates(&lat, &invalidLng) {
+		t.Errorf("Expected out of bound lng to be invalid")
+	}
+}
+
+func TestHaversineDistanceKm(t *testing.T) {
+	// Same point distance should be 0
+	d0 := models.HaversineDistanceKm(23.8103, 90.4125, 23.8103, 90.4125)
+	if d0 > 0.001 {
+		t.Errorf("Expected 0 distance for identical coordinates, got %f", d0)
+	}
+
+	// Dhaka (23.8103, 90.4125) to Chittagong (22.3569, 91.7832) is approx 210-220 km
+	d1 := models.HaversineDistanceKm(23.8103, 90.4125, 22.3569, 91.7832)
+	if d1 < 200 || d1 > 230 {
+		t.Errorf("Expected distance between Dhaka and Chittagong to be ~215 km, got %f", d1)
+	}
+
+	// Dhanmondi (23.7465, 90.3760) to Gulshan (23.7925, 90.4078) is approx 6-7 km
+	d2 := models.HaversineDistanceKm(23.7465, 90.3760, 23.7925, 90.4078)
+	if d2 < 5 || d2 > 8 {
+		t.Errorf("Expected distance between Dhanmondi and Gulshan to be ~6.5 km, got %f", d2)
+	}
+}
+

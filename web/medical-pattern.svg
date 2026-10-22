@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" fill="none">
+  <g stroke="#9f1239" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.19">
+    <!-- Medical cross -->
+    <path d="M57 42h24v24h24v24H81v24H57V90H33V66h24z"/>
+
+    <!-- Blood drop -->
+    <path d="M218 38c-16 24-39 53-39 76a39 39 0 0 0 78 0c0-23-23-52-39-76Z"/>
+    <path d="M198 119c2 10 9 16 19 18"/>
+
+    <!-- Syringe -->
+    <g transform="translate(406 35) rotate(-42 54 54)">
+      <path d="M54 6v23m-12 0h24M42 29h24v68H42zM36 40h36M36 85h36M54 97v22m-10 0h20M54 119v18"/>
+    </g>
+
+    <!-- Stethoscope -->
+    <path d="M56 215v24a24 24 0 0 0 48 0v-24m-48 0v22a43 43 0 0 0 86 0v-22m-43 20v43a22 22 0 0 0 22 22h16"/>
+    <circle cx="148" cy="300" r="10"/>
+
+    <!-- Doctor with coat and cross -->
+    <circle cx="300" cy="215" r="24"/>
+    <path d="M256 304c3-38 20-58 44-58s41 20 44 58m-44-48v48m-16-45 16 17 16-17m-14 3v14h12v-14"/>
+
+    <!-- Patient on a stretcher -->
+    <path d="M420 283h164M433 283v28m138-28v28M421 311h166m-147 0-9 20m119-20 9 20"/>
+    <circle cx="445" cy="246" r="15"/>
+    <path d="M461 254c13 1 21 8 27 18h42m-56-15 14 15m42 0 25-17m-104 58v14m72-14v14"/>
+    <circle cx="445" cy="333" r="8"/><circle cx="556" cy="333" r="8"/>
+
+    <!-- Ambulance -->
+    <path d="M47 425h112v78H47zm112 27h39l27 27v24h-66zM159 468h57m-34-16v32m-16-16h32"/>
+    <circle cx="81" cy="506" r="12"/><circle cx="190" cy="506" r="12"/>
+
+    <!-- First aid kit -->
+    <path d="M277 447h104v83H277zm29 0v-17h46v17m-23 23v36m-18-18h36"/>
+
+    <!-- Heart and pulse -->
+    <path d="M126 565c-27-19-47-36-47-57a25 25 0 0 1 47-12 25 25 0 0 1 47 12c0 21-20 38-47 57Z"/>
+    <path d="M94 529h18l9-15 12 30 10-16h16"/>
+
+    <!-- Medicine capsule -->
+    <g transform="translate(344 548) rotate(-35 47 25)">
+      <rect x="10" y="7" width="74" height="36" rx="18"/>
+      <path d="M47 8v34"/>
+    </g>
+
+    <!-- Medical clipboard -->
+    <path d="M500 450h86v102h-86zm22 0v-13h42v13m-42 29h42m-42 20h42m-42 20h30"/>
+  </g>
+</svg>
