@@ -110,7 +110,7 @@ func setupTestRouter(repo repositories.DonorRepository) http.Handler {
 		Port:   "8080",
 		AppEnv: "test",
 	}
-	return routes.SetupRouter(cfg, repo)
+	return routes.SetupRouter(cfg, repo, nil)
 }
 
 func TestDonorEndpoints_CRUD(t *testing.T) {

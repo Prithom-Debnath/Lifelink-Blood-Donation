@@ -9,7 +9,7 @@ import (
 )
 
 // SetupRouter initializes the Gin engine, attaches middleware, and registers all API routes.
-func SetupRouter(cfg *config.Config, donorRepo repositories.DonorRepository) *gin.Engine {
+func SetupRouter(cfg *config.Config, donorRepo repositories.DonorRepository, requestRepo repositories.BloodRequestRepository) *gin.Engine {
 	// Set Gin mode based on the environment configuration
 	if cfg.AppEnv == "production" {
 		gin.SetMode(gin.ReleaseMode)
@@ -33,6 +33,14 @@ func SetupRouter(cfg *config.Config, donorRepo repositories.DonorRepository) *gi
 			api.GET("/donors/:id", donorHandler.GetDonorByID)
 			api.PUT("/donors/:id", donorHandler.UpdateDonor)
 			api.DELETE("/donors/:id", donorHandler.DeleteDonor)
+		}
+
+		// Register blood request endpoints if a repository is provided
+		if requestRepo != nil {
+			requestHandler := handlers.NewBloodRequestHandler(requestRepo)
+			api.POST("/requests", requestHandler.CreateBloodRequest)
+			api.GET("/requests", requestHandler.ListBloodRequests)
+			api.GET("/requests/:id", requestHandler.GetBloodRequestByID)
 		}
 	}
 

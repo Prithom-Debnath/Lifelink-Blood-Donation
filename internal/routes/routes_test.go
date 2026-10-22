@@ -16,7 +16,7 @@ func TestHealthCheckEndpoint(t *testing.T) {
 		Port:   "8080",
 		AppEnv: "test",
 	}
-	router := routes.SetupRouter(cfg, nil)
+	router := routes.SetupRouter(cfg, nil, nil)
 
 	// 2. Act: create an HTTP GET request to /api/health
 	req, err := http.NewRequest(http.MethodGet, "/api/health", nil)

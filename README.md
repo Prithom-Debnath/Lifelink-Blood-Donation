@@ -11,7 +11,7 @@ LifeLink is a lightweight, educational backend application built with **Go** and
 - [x] **Milestone 3: Donor data model and repository**
 - [x] **Milestone 4: Donor CRUD endpoints**
 - [x] **Milestone 5 (Part 1): Blood request model and repository**
-- [ ] Milestone 5 (Part 2): Blood request HTTP endpoints
+- [x] **Milestone 5 (Part 2): Blood request HTTP endpoints**
 - [ ] Milestone 6: Input validation and standardized error handling
 - [ ] Milestone 7: User registration and password hashing with bcrypt
 - [ ] Milestone 8: JWT authentication middleware for write operations
@@ -35,7 +35,7 @@ The project uses a standard, beginner-friendly modular structure to separate con
 │   ├── database/           # MongoDB connection lifecycle, Ping reachability check, and cleanup
 │   ├── models/             # Data models (Donor, BloodRequest structs with BSON/JSON tags)
 │   ├── repositories/       # MongoDB data access layer (Donor and BloodRequest repositories)
-│   ├── handlers/           # HTTP controllers (Health and Donor CRUD handlers)
+│   ├── handlers/           # HTTP controllers (Health, Donor, and Blood Request handlers)
 │   ├── routes/             # Gin engine router setup, route grouping, and tests
 │   └── middleware/         # (Upcoming) Authentication and logging middleware
 ├── web/                    # (Upcoming) Simple static frontend files
@@ -189,7 +189,91 @@ All API endpoints use the `/api` prefix and return standard JSON.
 - **Method & Path:** `DELETE /api/donors/:id`
 - **Status Codes:** `200 OK`, `400 Bad Request`, `404 Not Found`
 
-*(HTTP handlers and endpoints for blood requests will be wired in the next milestone.)*
+### 7. Create Blood Request
+- **Method & Path:** `POST /api/requests`
+- **Status Codes:** `201 Created`, `400 Bad Request`, `500 Internal Server Error`
+- **Request Body Example (snake_case or camelCase supported):**
+  ```json
+  {
+    "patient_name": "Rahim Uddin",
+    "blood_group": "B+",
+    "hospital": "Dhaka Medical College Hospital",
+    "city": "Dhaka",
+    "contact_phone": "+8801711223344"
+  }
+  ```
+- **Response Example (201 Created):**
+  ```json
+  {
+    "id": "6717a0b5f5e27a14e9123456",
+    "patient_name": "Rahim Uddin",
+    "blood_group": "B+",
+    "hospital": "Dhaka Medical College Hospital",
+    "city": "Dhaka",
+    "contact_phone": "+8801711223344",
+    "status": "open",
+    "created_at": "2026-10-22T09:15:00Z",
+    "updated_at": "2026-10-22T09:15:00Z"
+  }
+  ```
+
+### 8. List All Blood Requests
+- **Method & Path:** `GET /api/requests`
+- **Status Codes:** `200 OK`, `500 Internal Server Error`
+- **Response Example (200 OK):**
+  ```json
+  [
+    {
+      "id": "6717a0b5f5e27a14e9123456",
+      "patient_name": "Rahim Uddin",
+      "blood_group": "B+",
+      "hospital": "Dhaka Medical College Hospital",
+      "city": "Dhaka",
+      "contact_phone": "+8801711223344",
+      "status": "open",
+      "created_at": "2026-10-22T09:15:00Z",
+      "updated_at": "2026-10-22T09:15:00Z"
+    }
+  ]
+  ```
+  *(Returns `[]` empty JSON array when no blood requests are present.)*
+
+### 9. Get Blood Request by ID
+- **Method & Path:** `GET /api/requests/:id`
+- **Status Codes:** `200 OK`, `400 Bad Request`, `404 Not Found`, `500 Internal Server Error`
+- **Response Example (200 OK):**
+  ```json
+  {
+    "id": "6717a0b5f5e27a14e9123456",
+    "patient_name": "Rahim Uddin",
+    "blood_group": "B+",
+    "hospital": "Dhaka Medical College Hospital",
+    "city": "Dhaka",
+    "contact_phone": "+8801711223344",
+    "status": "open",
+    "created_at": "2026-10-22T09:15:00Z",
+    "updated_at": "2026-10-22T09:15:00Z"
+  }
+  ```
+- **Error Responses:**
+  - `400 Bad Request` (Invalid hex ObjectID format):
+    ```json
+    {
+      "error": "Invalid blood request ID format"
+    }
+    ```
+  - `404 Not Found` (Record does not exist):
+    ```json
+    {
+      "error": "Blood request not found"
+    }
+    ```
+  - `500 Internal Server Error` (Unexpected database error):
+    ```json
+    {
+      "error": "Failed to retrieve blood request"
+    }
+    ```
 
 ---
 
@@ -229,4 +313,4 @@ Run all unit and integration tests across the repository:
 ```powershell
 go test -v ./...
 ```
-*(Tests include route response validation, database connection lifecycle, model JSON deserialization, donor repository CRUD, donor HTTP handlers, and blood request repository operations.)*
+*(Tests include route response validation, database connection lifecycle, model JSON deserialization, donor repository CRUD, donor HTTP handlers, blood request repository operations, and blood request HTTP handlers.)*

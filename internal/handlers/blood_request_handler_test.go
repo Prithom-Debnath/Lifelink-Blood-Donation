@@ -1,0 +1,379 @@
+package handlers_test
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"sync"
+	"testing"
+	"time"
+
+	"lifelink/internal/config"
+	"lifelink/internal/models"
+	"lifelink/internal/repositories"
+	"lifelink/internal/routes"
+
+	"go.mongodb.org/mongo-driver/v2/bson"
+)
+
+// mockBloodRequestRepo is an in-memory mock implementation of repositories.BloodRequestRepository for handler tests.
+type mockBloodRequestRepo struct {
+	mu          sync.RWMutex
+	requests    map[string]models.BloodRequest
+	createErr   error
+	listErr     error
+	findByIDErr error
+}
+
+func newMockBloodRequestRepo() *mockBloodRequestRepo {
+	return &mockBloodRequestRepo{
+		requests: make(map[string]models.BloodRequest),
+	}
+}
+
+func (m *mockBloodRequestRepo) Create(ctx context.Context, req *models.BloodRequest) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.createErr != nil {
+		return m.createErr
+	}
+
+	if req.ID.IsZero() {
+		req.ID = bson.NewObjectID()
+	}
+	if req.Status == "" {
+		req.Status = models.StatusOpen
+	}
+	now := time.Now().UTC()
+	if req.CreatedAt.IsZero() {
+		req.CreatedAt = now
+	}
+	req.UpdatedAt = now
+
+	m.requests[req.ID.Hex()] = *req
+	return nil
+}
+
+func (m *mockBloodRequestRepo) List(ctx context.Context) ([]models.BloodRequest, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.listErr != nil {
+		return nil, m.listErr
+	}
+
+	list := make([]models.BloodRequest, 0, len(m.requests))
+	for _, r := range m.requests {
+		list = append(list, r)
+	}
+	return list, nil
+}
+
+func (m *mockBloodRequestRepo) FindByID(ctx context.Context, id string) (*models.BloodRequest, error) {
+	if _, err := bson.ObjectIDFromHex(id); err != nil {
+		return nil, repositories.ErrInvalidBloodRequestID
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.findByIDErr != nil {
+		return nil, m.findByIDErr
+	}
+
+	req, exists := m.requests[id]
+	if !exists {
+		return nil, repositories.ErrBloodRequestNotFound
+	}
+	return &req, nil
+}
+
+func setupTestRouterWithRequestRepo(repo repositories.BloodRequestRepository) http.Handler {
+	cfg := &config.Config{
+		Port:   "8080",
+		AppEnv: "test",
+	}
+	return routes.SetupRouter(cfg, nil, repo)
+}
+
+func TestBloodRequestEndpoints_CreateSuccess(t *testing.T) {
+	repo := newMockBloodRequestRepo()
+	router := setupTestRouterWithRequestRepo(repo)
+
+	payload := []byte(`{
+		"patient_name": "Rahim Uddin",
+		"blood_group": "B+",
+		"hospital": "Dhaka Medical College Hospital",
+		"city": "Dhaka",
+		"contact_phone": "+8801711223344"
+	}`)
+
+	req, _ := http.NewRequest(http.MethodPost, "/api/requests", bytes.NewBuffer(payload))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("Expected status 201 Created, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var created models.BloodRequest
+	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
+		t.Fatalf("Failed to parse created blood request JSON: %v", err)
+	}
+
+	if created.ID.IsZero() {
+		t.Errorf("Expected non-zero ObjectID, got zero")
+	}
+	if created.PatientName != "Rahim Uddin" {
+		t.Errorf("Expected patient_name 'Rahim Uddin', got '%s'", created.PatientName)
+	}
+	if created.BloodGroup != "B+" {
+		t.Errorf("Expected blood_group 'B+', got '%s'", created.BloodGroup)
+	}
+	if created.Hospital != "Dhaka Medical College Hospital" {
+		t.Errorf("Expected hospital 'Dhaka Medical College Hospital', got '%s'", created.Hospital)
+	}
+	if created.City != "Dhaka" {
+		t.Errorf("Expected city 'Dhaka', got '%s'", created.City)
+	}
+	if created.ContactPhone != "+8801711223344" {
+		t.Errorf("Expected contact_phone '+8801711223344', got '%s'", created.ContactPhone)
+	}
+	if created.Status != models.StatusOpen {
+		t.Errorf("Expected status '%s', got '%s'", models.StatusOpen, created.Status)
+	}
+	if created.CreatedAt.IsZero() || created.UpdatedAt.IsZero() {
+		t.Errorf("Expected non-zero timestamps, got CreatedAt: %v, UpdatedAt: %v", created.CreatedAt, created.UpdatedAt)
+	}
+}
+
+func TestBloodRequestEndpoints_CreateCamelCase(t *testing.T) {
+	repo := newMockBloodRequestRepo()
+	router := setupTestRouterWithRequestRepo(repo)
+
+	payload := []byte(`{
+		"patientName": "Farhana Ahmed",
+		"bloodGroup": "O-",
+		"hospital": "Square Hospital",
+		"city": "Dhaka",
+		"contactPhone": "+8801811223344"
+	}`)
+
+	req, _ := http.NewRequest(http.MethodPost, "/api/requests", bytes.NewBuffer(payload))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("Expected status 201 Created for camelCase, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var created models.BloodRequest
+	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
+		t.Fatalf("Failed to parse created blood request JSON: %v", err)
+	}
+
+	if created.PatientName != "Farhana Ahmed" || created.BloodGroup != "O-" || created.ContactPhone != "+8801811223344" {
+		t.Errorf("Mismatch in camelCase deserialization: %+v", created)
+	}
+}
+
+func TestBloodRequestEndpoints_CreateInvalidJSON(t *testing.T) {
+	repo := newMockBloodRequestRepo()
+	router := setupTestRouterWithRequestRepo(repo)
+
+	req, _ := http.NewRequest(http.MethodPost, "/api/requests", bytes.NewBufferString("{invalid-json"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected status 400 Bad Request on malformed JSON, got %d", w.Code)
+	}
+
+	var errResp map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &errResp); err != nil || errResp["error"] == "" {
+		t.Errorf("Expected JSON error response, got %s", w.Body.String())
+	}
+}
+
+func TestBloodRequestEndpoints_CreateDatabaseError(t *testing.T) {
+	repo := newMockBloodRequestRepo()
+	repo.createErr = errors.New("simulated mongo write failure")
+	router := setupTestRouterWithRequestRepo(repo)
+
+	payload := []byte(`{
+		"patient_name": "Test Patient",
+		"blood_group": "A+",
+		"hospital": "City Hospital",
+		"city": "Chittagong",
+		"contact_phone": "+8801911223344"
+	}`)
+
+	req, _ := http.NewRequest(http.MethodPost, "/api/requests", bytes.NewBuffer(payload))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Expected status 500 Internal Server Error, got %d", w.Code)
+	}
+}
+
+func TestBloodRequestEndpoints_ListEmpty(t *testing.T) {
+	repo := newMockBloodRequestRepo()
+	router := setupTestRouterWithRequestRepo(repo)
+
+	req, _ := http.NewRequest(http.MethodGet, "/api/requests", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status 200 OK, got %d", w.Code)
+	}
+
+	// Body should be an empty JSON array "[]", not "null"
+	if w.Body.String() != "[]" {
+		t.Errorf("Expected '[]' for empty list, got '%s'", w.Body.String())
+	}
+}
+
+func TestBloodRequestEndpoints_ListPopulated(t *testing.T) {
+	repo := newMockBloodRequestRepo()
+	router := setupTestRouterWithRequestRepo(repo)
+
+	_ = repo.Create(context.Background(), &models.BloodRequest{
+		PatientName:  "Patient One",
+		BloodGroup:   "A+",
+		Hospital:     "Hospital A",
+		City:         "Dhaka",
+		ContactPhone: "+8801700000001",
+	})
+	_ = repo.Create(context.Background(), &models.BloodRequest{
+		PatientName:  "Patient Two",
+		BloodGroup:   "O+",
+		Hospital:     "Hospital B",
+		City:         "Sylhet",
+		ContactPhone: "+8801700000002",
+	})
+
+	req, _ := http.NewRequest(http.MethodGet, "/api/requests", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status 200 OK, got %d", w.Code)
+	}
+
+	var requests []models.BloodRequest
+	if err := json.Unmarshal(w.Body.Bytes(), &requests); err != nil {
+		t.Fatalf("Failed to decode requests: %v", err)
+	}
+
+	if len(requests) != 2 {
+		t.Errorf("Expected 2 requests, got %d", len(requests))
+	}
+}
+
+func TestBloodRequestEndpoints_ListDatabaseError(t *testing.T) {
+	repo := newMockBloodRequestRepo()
+	repo.listErr = errors.New("simulated query error")
+	router := setupTestRouterWithRequestRepo(repo)
+
+	req, _ := http.NewRequest(http.MethodGet, "/api/requests", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Expected status 500 Internal Server Error, got %d", w.Code)
+	}
+}
+
+func TestBloodRequestEndpoints_GetByIDSuccess(t *testing.T) {
+	repo := newMockBloodRequestRepo()
+	router := setupTestRouterWithRequestRepo(repo)
+
+	bloodReq := &models.BloodRequest{
+		PatientName:  "Tariqul Islam",
+		BloodGroup:   "AB+",
+		Hospital:     "Apollo Hospital",
+		City:         "Dhaka",
+		ContactPhone: "+8801755667788",
+	}
+	_ = repo.Create(context.Background(), bloodReq)
+	idHex := bloodReq.ID.Hex()
+
+	req, _ := http.NewRequest(http.MethodGet, "/api/requests/"+idHex, nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status 200 OK, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var fetched models.BloodRequest
+	if err := json.Unmarshal(w.Body.Bytes(), &fetched); err != nil {
+		t.Fatalf("Failed to parse fetched JSON: %v", err)
+	}
+
+	if fetched.PatientName != "Tariqul Islam" || fetched.Hospital != "Apollo Hospital" {
+		t.Errorf("Fetched request data mismatch: %+v", fetched)
+	}
+}
+
+func TestBloodRequestEndpoints_GetByIDInvalidHex(t *testing.T) {
+	repo := newMockBloodRequestRepo()
+	router := setupTestRouterWithRequestRepo(repo)
+
+	req, _ := http.NewRequest(http.MethodGet, "/api/requests/not-a-valid-hex-id", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected status 400 Bad Request on invalid ID format, got %d", w.Code)
+	}
+
+	var errResp map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &errResp); err != nil || errResp["error"] != "Invalid blood request ID format" {
+		t.Errorf("Unexpected error response: %s", w.Body.String())
+	}
+}
+
+func TestBloodRequestEndpoints_GetByIDNotFound(t *testing.T) {
+	repo := newMockBloodRequestRepo()
+	router := setupTestRouterWithRequestRepo(repo)
+
+	nonExistentHex := bson.NewObjectID().Hex()
+	req, _ := http.NewRequest(http.MethodGet, "/api/requests/"+nonExistentHex, nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("Expected status 404 Not Found, got %d", w.Code)
+	}
+
+	var errResp map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &errResp); err != nil || errResp["error"] != "Blood request not found" {
+		t.Errorf("Unexpected error response: %s", w.Body.String())
+	}
+}
+
+func TestBloodRequestEndpoints_GetByIDDatabaseError(t *testing.T) {
+	repo := newMockBloodRequestRepo()
+	repo.findByIDErr = errors.New("simulated mongo read timeout")
+	router := setupTestRouterWithRequestRepo(repo)
+
+	validHex := bson.NewObjectID().Hex()
+	req, _ := http.NewRequest(http.MethodGet, "/api/requests/"+validHex, nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Expected status 500 Internal Server Error, got %d", w.Code)
+	}
+}
