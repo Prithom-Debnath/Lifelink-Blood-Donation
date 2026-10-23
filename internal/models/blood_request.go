@@ -13,12 +13,12 @@ import (
 const (
 	StatusOpen      = "open"
 	StatusFulfilled = "fulfilled"
-	StatusCancelled = "cancelled"
 )
 
 // BloodRequest represents an urgent patient request for blood donation stored in MongoDB.
 type BloodRequest struct {
 	ID           bson.ObjectID `bson:"_id,omitempty" json:"id"`
+	OwnerUserID  string        `bson:"owner_user_id,omitempty" json:"owner_user_id,omitempty"`
 	PatientName  string        `bson:"patient_name" json:"patient_name"`
 	BloodGroup   string        `bson:"blood_group" json:"blood_group"`
 	Hospital     string        `bson:"hospital" json:"hospital"`
@@ -83,7 +83,7 @@ func (r *BloodRequest) Validate() error {
 		return errors.New("contact_phone is required")
 	}
 	if strings.TrimSpace(r.Status) != "" && !IsValidStatus(r.Status) {
-		return errors.New("invalid status: must be one of open, fulfilled, cancelled")
+		return errors.New("invalid status: must be one of open or fulfilled")
 	}
 	if strings.TrimSpace(r.Urgency) != "" && !IsValidUrgency(r.Urgency) {
 		return errors.New("invalid urgency: must be one of normal, urgent, critical")

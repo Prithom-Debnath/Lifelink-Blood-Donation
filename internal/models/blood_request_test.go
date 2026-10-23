@@ -114,7 +114,4 @@ func TestBloodRequest_StatusConstants(t *testing.T) {
 	if models.StatusFulfilled != "fulfilled" {
 		t.Errorf("Expected StatusFulfilled to be 'fulfilled', got %s", models.StatusFulfilled)
 	}
-	if models.StatusCancelled != "cancelled" {
-		t.Errorf("Expected StatusCancelled to be 'cancelled', got %s", models.StatusCancelled)
-	}
 }

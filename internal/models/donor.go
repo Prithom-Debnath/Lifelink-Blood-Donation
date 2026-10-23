@@ -9,20 +9,32 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
+// DonationReminderIntervalDays is an educational app reminder interval, not donor eligibility guidance.
+const DonationReminderIntervalDays = 120
+
+// DonationRecord stores a donor-reported whole blood donation date and optional location.
+type DonationRecord struct {
+	DonationDate time.Time `bson:"donation_date" json:"donation_date"`
+	Location     string    `bson:"location,omitempty" json:"location,omitempty"`
+	RecordedAt   time.Time `bson:"recorded_at" json:"recorded_at"`
+}
+
 // Donor represents a blood donor document stored in MongoDB.
 type Donor struct {
-	ID           bson.ObjectID `bson:"_id,omitempty" json:"id"`
-	Name         string        `bson:"name" json:"name"`
-	Email        string        `bson:"email" json:"email"`
-	Phone        string        `bson:"phone" json:"phone"`
-	BloodGroup   string        `bson:"blood_group" json:"blood_group"`
-	City         string        `bson:"city" json:"city"`
-	Availability bool          `bson:"availability" json:"availability"`
-	Latitude     *float64      `bson:"latitude,omitempty" json:"latitude,omitempty"`
-	Longitude    *float64      `bson:"longitude,omitempty" json:"longitude,omitempty"`
-	DistanceKm   *float64      `bson:"-" json:"distance_km,omitempty"`
-	CreatedAt    time.Time     `bson:"created_at" json:"created_at"`
-	UpdatedAt    time.Time     `bson:"updated_at" json:"updated_at"`
+	ID              bson.ObjectID    `bson:"_id,omitempty" json:"id"`
+	OwnerUserID     string           `bson:"owner_user_id,omitempty" json:"owner_user_id,omitempty"`
+	Name            string           `bson:"name" json:"name"`
+	Email           string           `bson:"email" json:"email"`
+	Phone           string           `bson:"phone" json:"phone"`
+	BloodGroup      string           `bson:"blood_group" json:"blood_group"`
+	City            string           `bson:"city" json:"city"`
+	Availability    bool             `bson:"availability" json:"availability"`
+	Latitude        *float64         `bson:"latitude,omitempty" json:"latitude,omitempty"`
+	Longitude       *float64         `bson:"longitude,omitempty" json:"longitude,omitempty"`
+	DistanceKm      *float64         `bson:"-" json:"distance_km,omitempty"`
+	DonationHistory []DonationRecord `bson:"donation_history,omitempty" json:"donation_history,omitempty"`
+	CreatedAt       time.Time        `bson:"created_at" json:"created_at"`
+	UpdatedAt       time.Time        `bson:"updated_at" json:"updated_at"`
 }
 
 // UnmarshalJSON provides flexible deserialization accepting either snake_case (blood_group)

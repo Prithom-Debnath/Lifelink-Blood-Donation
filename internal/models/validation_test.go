@@ -54,14 +54,14 @@ func TestValidation_IsValidEmail(t *testing.T) {
 }
 
 func TestValidation_IsValidStatus(t *testing.T) {
-	validStatuses := []string{models.StatusOpen, models.StatusFulfilled, models.StatusCancelled}
+	validStatuses := []string{models.StatusOpen, models.StatusFulfilled}
 	for _, s := range validStatuses {
 		if !models.IsValidStatus(s) {
 			t.Errorf("Expected status '%s' to be valid", s)
 		}
 	}
 
-	invalidStatuses := []string{"", "pending", "closed", "in_progress", "OPEN", "123"}
+	invalidStatuses := []string{"", "pending", "closed", "cancelled", "in_progress", "OPEN", "123"}
 	for _, s := range invalidStatuses {
 		if models.IsValidStatus(s) {
 			t.Errorf("Expected status '%s' to be invalid", s)
@@ -162,7 +162,7 @@ func TestBloodRequest_Validate(t *testing.T) {
 	}
 
 	// 2. Valid request with explicit statuses
-	for _, status := range []string{models.StatusOpen, models.StatusFulfilled, models.StatusCancelled} {
+	for _, status := range []string{models.StatusOpen, models.StatusFulfilled} {
 		req = baseValid()
 		req.Status = status
 		if err := req.Validate(); err != nil {
@@ -215,7 +215,7 @@ func TestBloodRequest_Validate(t *testing.T) {
 	// 9. Invalid status
 	req = baseValid()
 	req.Status = "in_progress"
-	if err := req.Validate(); err == nil || err.Error() != "invalid status: must be one of open, fulfilled, cancelled" {
+	if err := req.Validate(); err == nil || err.Error() != "invalid status: must be one of open or fulfilled" {
 		t.Errorf("Expected invalid status error, got: %v", err)
 	}
 }
@@ -295,4 +295,3 @@ func TestHaversineDistanceKm(t *testing.T) {
 		t.Errorf("Expected distance between Dhanmondi and Gulshan to be ~6.5 km, got %f", d2)
 	}
 }
-

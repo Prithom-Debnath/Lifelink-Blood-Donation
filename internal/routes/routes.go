@@ -6,6 +6,7 @@ import (
 	"lifelink/internal/config"
 	"lifelink/internal/handlers"
 	"lifelink/internal/middleware"
+	"lifelink/internal/notifications"
 	"lifelink/internal/repositories"
 
 	"github.com/gin-gonic/gin"
@@ -43,6 +44,7 @@ func SetupRouter(
 
 	// API route group with consistent /api prefix
 	api := router.Group("/api")
+	authRequired := middleware.AuthMiddleware(cfg.JWTSecret)
 	{
 		api.GET("/health", handlers.HealthCheck)
 
@@ -60,10 +62,11 @@ func SetupRouter(
 		// Register donor endpoints if a repository is provided
 		if donorRepo != nil {
 			donorHandler := handlers.NewDonorHandler(donorRepo)
-			api.POST("/donors", donorHandler.CreateDonor)
+			api.POST("/donors", authRequired, donorHandler.CreateDonor)
 			api.GET("/donors", donorHandler.ListDonors)
 			api.GET("/donors/:id", donorHandler.GetDonorByID)
 			api.PUT("/donors/:id", donorHandler.UpdateDonor)
+			api.POST("/donors/:id/donations", authRequired, donorHandler.RecordDonation)
 			api.DELETE("/donors/:id", donorHandler.DeleteDonor)
 
 			// Register donor matching endpoint
@@ -73,10 +76,20 @@ func SetupRouter(
 
 		// Register blood request endpoints if a repository is provided
 		if requestRepo != nil {
-			requestHandler := handlers.NewBloodRequestHandler(requestRepo)
-			api.POST("/requests", requestHandler.CreateBloodRequest)
+			emailNotifier := notifications.NewEmailNotifier(notifications.SMTPConfig{
+				Host:     cfg.SMTPHost,
+				Port:     cfg.SMTPPort,
+				Username: cfg.SMTPUsername,
+				Password: cfg.SMTPPassword,
+				From:     cfg.SMTPFrom,
+			})
+			requestHandler := handlers.NewBloodRequestHandler(requestRepo, donorRepo, emailNotifier)
+			api.POST("/requests", authRequired, requestHandler.CreateBloodRequest)
 			api.GET("/requests", requestHandler.ListBloodRequests)
 			api.GET("/requests/:id", requestHandler.GetBloodRequestByID)
+			api.PUT("/requests/:id", authRequired, requestHandler.UpdateBloodRequest)
+			api.PATCH("/requests/:id/status", authRequired, requestHandler.UpdateBloodRequestStatus)
+			api.DELETE("/requests/:id", authRequired, requestHandler.DeleteBloodRequest)
 		}
 	}
 

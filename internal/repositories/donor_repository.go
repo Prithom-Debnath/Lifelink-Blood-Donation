@@ -18,7 +18,16 @@ var (
 
 	// ErrInvalidID is returned when an ID cannot be parsed as a valid MongoDB ObjectID hex string.
 	ErrInvalidID = errors.New("invalid donor id format")
+
+	// ErrDuplicateDonationDate is returned when a donation is already recorded for that date.
+	ErrDuplicateDonationDate = errors.New("donation is already recorded for this date")
+	ErrDonorForbidden        = errors.New("donor is owned by another account")
 )
+
+// OwnedDonorRepository supports owner-checked donor mutations.
+type OwnedDonorRepository interface {
+	RecordDonationOwned(ctx context.Context, id, ownerUserID string, donation models.DonationRecord) error
+}
 
 // DonorRepository defines data access methods for donor records.
 type DonorRepository interface {
@@ -26,6 +35,7 @@ type DonorRepository interface {
 	List(ctx context.Context) ([]models.Donor, error)
 	FindByID(ctx context.Context, id string) (*models.Donor, error)
 	Update(ctx context.Context, id string, donor *models.Donor) error
+	RecordDonation(ctx context.Context, id string, donation models.DonationRecord) error
 	Delete(ctx context.Context, id string) error
 }
 
@@ -136,6 +146,56 @@ func (r *MongoDonorRepository) Update(ctx context.Context, id string, donor *mod
 	}
 
 	return nil
+}
+
+// RecordDonation appends a donor-reported donation date without replacing earlier history.
+func (r *MongoDonorRepository) RecordDonation(ctx context.Context, id string, donation models.DonationRecord) error {
+	return r.recordDonation(ctx, id, "", donation)
+}
+
+func (r *MongoDonorRepository) RecordDonationOwned(ctx context.Context, id, ownerUserID string, donation models.DonationRecord) error {
+	return r.recordDonation(ctx, id, ownerUserID, donation)
+}
+
+func (r *MongoDonorRepository) recordDonation(ctx context.Context, id, ownerUserID string, donation models.DonationRecord) error {
+	objID, err := bson.ObjectIDFromHex(id)
+	if err != nil {
+		return ErrInvalidID
+	}
+
+	donation.DonationDate = donation.DonationDate.UTC()
+	donation.RecordedAt = time.Now().UTC()
+	filter := bson.M{"_id": objID, "donation_history.donation_date": bson.M{"$ne": donation.DonationDate}}
+	if ownerUserID != "" {
+		filter["owner_user_id"] = ownerUserID
+	}
+	result, err := r.collection.UpdateOne(ctx,
+		filter,
+		bson.M{
+			"$push": bson.M{"donation_history": donation},
+			"$set":  bson.M{"updated_at": donation.RecordedAt},
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to record donor donation: %w", err)
+	}
+	if result.MatchedCount > 0 {
+		return nil
+	}
+
+	donor, err := r.FindByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if ownerUserID != "" && donor.OwnerUserID != ownerUserID {
+		return ErrDonorForbidden
+	}
+	for _, existing := range donor.DonationHistory {
+		if existing.DonationDate.Equal(donation.DonationDate) {
+			return ErrDuplicateDonationDate
+		}
+	}
+	return ErrNotFound
 }
 
 // Delete removes a donor record by their hex ObjectID.
