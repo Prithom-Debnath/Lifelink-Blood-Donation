@@ -9,11 +9,16 @@ import (
 
 // Config holds the application configuration values read from environment variables.
 type Config struct {
-	Port        string
-	AppEnv      string
-	MongoURI    string
-	MongoDBName string
-	JWTSecret   string
+	Port         string
+	AppEnv       string
+	MongoURI     string
+	MongoDBName  string
+	JWTSecret    string
+	SMTPHost     string
+	SMTPPort     string
+	SMTPUsername string
+	SMTPPassword string
+	SMTPFrom     string
 }
 
 // Load reads configuration from the environment and optional .env file.
@@ -26,11 +31,16 @@ func Load() *Config {
 	}
 
 	return &Config{
-		Port:        getEnv("PORT", "8080"),
-		AppEnv:      getEnv("APP_ENV", "development"),
-		MongoURI:    getEnv("MONGO_URI", "mongodb://localhost:27017"),
-		MongoDBName: getEnv("MONGO_DB_NAME", "lifelink_db"),
-		JWTSecret:   getEnv("JWT_SECRET", "default_jwt_secret_lifelink"),
+		Port:         getEnv("PORT", "8080"),
+		AppEnv:       getEnv("APP_ENV", "development"),
+		MongoURI:     getEnv("MONGO_URI", "mongodb://localhost:27017"),
+		MongoDBName:  getEnv("MONGO_DB_NAME", "lifelink_db"),
+		JWTSecret:    getEnv("JWT_SECRET", "default_jwt_secret_lifelink"),
+		SMTPHost:     getEnv("SMTP_HOST", ""),
+		SMTPPort:     getEnv("SMTP_PORT", "587"),
+		SMTPUsername: getEnv("SMTP_USERNAME", ""),
+		SMTPPassword: getEnv("SMTP_PASSWORD", ""),
+		SMTPFrom:     getEnv("SMTP_FROM", ""),
 	}
 }
 

@@ -10,7 +10,7 @@ import (
 var SupportedBloodGroups = []string{"A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"}
 
 // AllowedStatuses lists all valid blood request status values.
-var AllowedStatuses = []string{StatusOpen, StatusFulfilled, StatusCancelled}
+var AllowedStatuses = []string{StatusOpen, StatusFulfilled}
 
 // Urgency level constants for blood requests.
 const (
@@ -47,7 +47,7 @@ func IsValidEmail(email string) bool {
 // IsValidStatus checks if a given blood request status is one of the allowed statuses.
 func IsValidStatus(status string) bool {
 	switch strings.TrimSpace(status) {
-	case StatusOpen, StatusFulfilled, StatusCancelled:
+	case StatusOpen, StatusFulfilled:
 		return true
 	default:
 		return false

@@ -91,7 +91,32 @@ func (m *mockDonorRepo) Update(ctx context.Context, id string, donor *models.Don
 	donor.ID = existing.ID
 	donor.CreatedAt = existing.CreatedAt
 	donor.UpdatedAt = time.Now().UTC()
+	if donor.DonationHistory == nil {
+		donor.DonationHistory = existing.DonationHistory
+	}
 	m.donors[id] = *donor
+	return nil
+}
+
+func (m *mockDonorRepo) RecordDonation(ctx context.Context, id string, donation models.DonationRecord) error {
+	if _, err := bson.ObjectIDFromHex(id); err != nil {
+		return repositories.ErrInvalidID
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	donor, exists := m.donors[id]
+	if !exists {
+		return repositories.ErrNotFound
+	}
+	for _, existing := range donor.DonationHistory {
+		if existing.DonationDate.Equal(donation.DonationDate) {
+			return repositories.ErrDuplicateDonationDate
+		}
+	}
+	donation.RecordedAt = time.Now().UTC()
+	donor.DonationHistory = append(donor.DonationHistory, donation)
+	donor.UpdatedAt = donation.RecordedAt
+	m.donors[id] = donor
 	return nil
 }
 
@@ -392,4 +417,3 @@ func TestDonorEndpoints_Validation(t *testing.T) {
 		t.Errorf("Expected status 400 on PUT with invalid blood group, got %d", wPutBG.Code)
 	}
 }
-

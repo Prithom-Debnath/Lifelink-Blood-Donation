@@ -3,6 +3,8 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"strings"
+	"time"
 
 	"lifelink/internal/models"
 	"lifelink/internal/repositories"
@@ -32,6 +34,9 @@ func (h *DonorHandler) CreateDonor(c *gin.Context) {
 			"error": "Invalid request payload: " + err.Error(),
 		})
 		return
+	}
+	if owner, ok := c.Get("userID"); ok {
+		donor.OwnerUserID, _ = owner.(string)
 	}
 
 	// Validate required fields, email format, and supported blood group
@@ -142,6 +147,63 @@ func (h *DonorHandler) UpdateDonor(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, updated)
+}
+
+// RecordDonation handles POST /api/donors/:id/donations.
+func (h *DonorHandler) RecordDonation(c *gin.Context) {
+	var payload struct {
+		DonationDate string `json:"donation_date"`
+		Location     string `json:"location"`
+	}
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload: " + err.Error()})
+		return
+	}
+	dateText := strings.TrimSpace(payload.DonationDate)
+	donationDate, err := time.Parse("2006-01-02", dateText)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "donation_date must use YYYY-MM-DD format"})
+		return
+	}
+	bdTime := time.Now().In(time.FixedZone("Asia/Dhaka", 6*60*60))
+	today := bdTime.Format("2006-01-02")
+	if dateText > today {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "donation_date cannot be in the future"})
+		return
+	}
+
+	donationDate = donationDate.UTC()
+	donation := models.DonationRecord{
+		DonationDate: donationDate,
+		Location:     strings.TrimSpace(payload.Location),
+	}
+	ownerID, _ := c.Get("userID")
+	ownedRepo, ok := h.repo.(repositories.OwnedDonorRepository)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ownership checks are unavailable"})
+		return
+	}
+	if err := ownedRepo.RecordDonationOwned(c.Request.Context(), c.Param("id"), ownerID.(string), donation); err != nil {
+		switch {
+		case errors.Is(err, repositories.ErrInvalidID):
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid donor ID format"})
+		case errors.Is(err, repositories.ErrNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "Donor not found"})
+		case errors.Is(err, repositories.ErrDonorForbidden):
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only the account that registered this donor can record donations"})
+		case errors.Is(err, repositories.ErrDuplicateDonationDate):
+			c.JSON(http.StatusConflict, gin.H{"error": "A donation is already recorded for this date"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record donation"})
+		}
+		return
+	}
+
+	nextReminder := donationDate.AddDate(0, 0, models.DonationReminderIntervalDays)
+	c.JSON(http.StatusCreated, gin.H{
+		"donation_date":      dateText,
+		"next_reminder_date": nextReminder.Format("2006-01-02"),
+	})
 }
 
 // DeleteDonor handles DELETE /api/donors/:id to delete an existing donor record.

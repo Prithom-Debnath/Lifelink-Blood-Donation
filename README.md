@@ -104,6 +104,9 @@ Environment variables are loaded from the local `.env` file (which is excluded f
 | `MONGO_URI` | MongoDB connection string URI | `mongodb://localhost:27017` |
 | `MONGO_DB_NAME` | MongoDB database name | `lifelink_db` |
 | `JWT_SECRET` | Secret key used for signing and verifying JWT tokens | `supersecretdevkey_change_in_production` |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM` | Optional SMTP settings for urgent request email alerts; port defaults to `587` | Blank / `587` |
+
+Email alerts are sent only for `urgent` or `critical` requests, only to available donors with a compatible blood group whose saved location contains the request location. SMTP must support STARTTLS; if SMTP settings are blank, request submission still works and no email is sent. Keep `SMTP_PASSWORD` in the ignored local `.env` file, never in source control. The app sends one email with recipients hidden from one another.
 
 ## Models & Repositories
 
@@ -167,7 +170,7 @@ Represents urgent blood requests in MongoDB collection `blood_requests`:
 | `Hospital` | `string` | Hospital or clinic name | `hospital` | `hospital` |
 | `City` | `string` | City location | `city` | `city` |
 | `ContactPhone` | `string` | Emergency contact phone number | `contact_phone` | `contact_phone` / `contactPhone` |
-| `Status` | `string` | Request status (`open`, `fulfilled`, `cancelled`) | `status` | `status` |
+| `Status` | `string` | Request status (`open`, `fulfilled`) | `status` | `status` |
 | `CreatedAt` | `time.Time` | Creation timestamp (UTC) | `created_at` | `created_at` |
 | `UpdatedAt` | `time.Time` | Last update timestamp (UTC) | `updated_at` | `updated_at` |
 
@@ -306,12 +309,21 @@ All API endpoints use the `/api` prefix and communicate using standard JSON.
 - **Method & Path:** `PUT /api/donors/:id`
 - **Status Codes:** `200 OK`, `400 Bad Request`, `404 Not Found`
 
-#### 10. Delete Donor
+#### 10. Record Donor Donation
+- **Method & Path:** `POST /api/donors/:id/donations`
+- **Authentication:** Bearer token required. Only the account that registered the donor can add donation history; other signed-in accounts receive `403 Forbidden`.
+- **Request Body:** `{"donation_date":"2026-10-22","location":"Dhaka Medical College Hospital"}` (`location` is optional).
+- **Behavior:** Appends the donation to the donor's history and returns the app's next reminder date, 120 days later. Duplicate dates for one donor are rejected.
+- **Status Codes:** `201 Created`, `400 Bad Request`, `401 Unauthorized`, `403 Forbidden`, `404 Not Found`, `409 Conflict` for a duplicate date.
+- **Reminder disclaimer:** The 120-day reminder is an educational prompt, not a determination that someone is eligible to donate. Bangladesh's [Blood Transfusion Society FAQ](https://www.btsb.org.bd/faq/) gives a general 120-day interval, while [WHO donor-selection guidance](https://www.who.int/publications/i/item/blood-donor-selection-guidelines-on-assessing-donor-suitability-for-blood-donation) explains that policies and suitability vary; donors must confirm with qualified blood-bank staff.
+
+#### 11. Delete Donor
 - **Method & Path:** `DELETE /api/donors/:id`
 - **Status Codes:** `200 OK`, `400 Bad Request`, `404 Not Found`
 
-#### 11. Create Blood Request
+#### 12. Create Blood Request
 - **Method & Path:** `POST /api/requests`
+- **Authentication:** Bearer token required. The signed-in account is saved as the request owner.
 - **Status Code:** `201 Created`
 - **Request Body:**
   ```json
@@ -328,18 +340,36 @@ All API endpoints use the `/api` prefix and communicate using standard JSON.
 - **Urgency Levels:** `normal` (default), `urgent`, `critical`.
 - *Note:* Urgency level indicates operational triage priority and does **not** alter biological blood compatibility rules.
 
-#### 12. List Blood Requests (with Urgency Filtering & Sorting)
+#### 13. List Blood Requests (with Urgency Filtering & Sorting)
 - **Method & Path:** `GET /api/requests?urgency=critical&sort=urgency`
 - **Query Parameters:**
   - `urgency`: Optional filter (`normal`, `urgent`, `critical`).
   - `sort`: Optional sort order (`urgency` sorts Critical > Urgent > Normal, then newest; default sorts newest first).
 - **Status Code:** `200 OK`
 
-#### 13. Get Blood Request by ID
+#### 14. Get Blood Request by ID
 - **Method & Path:** `GET /api/requests/:id`
 - **Status Codes:** `200 OK`, `400 Bad Request`, `404 Not Found`
 
-#### 14. Emergency Compatibility Matching by Typed Location
+#### 15. Edit an Open Blood Request
+- **Method & Path:** `PUT /api/requests/:id`
+- **Authentication:** Bearer token required. Only the account that submitted the request can edit it.
+- **Request Body:** Patient name, blood group, urgency, hospital, city, and contact phone.
+- **Status Codes:** `200 OK`, `400 Bad Request`, `401 Unauthorized`, `403 Forbidden`, `404 Not Found`, `409 Conflict` if the request is already closed.
+
+#### 16. Fulfill an Open Blood Request
+- **Method & Path:** `PATCH /api/requests/:id/status`
+- **Authentication:** Bearer token required. Only the account that submitted the request can mark it fulfilled.
+- **Request Body:** `{"status":"fulfilled"}`.
+- **Status Codes:** `200 OK`, `400 Bad Request`, `401 Unauthorized`, `403 Forbidden`, `404 Not Found`, `409 Conflict` if the request is already closed.
+
+#### 17. Delete Your Blood Request
+- **Method & Path:** `DELETE /api/requests/:id`
+- **Authentication:** Bearer token required. Only the account that submitted the request can delete it.
+- **Behavior:** Deletes the owner's open or fulfilled request permanently.
+- **Status Codes:** `200 OK`, `400 Bad Request`, `401 Unauthorized`, `403 Forbidden`, `404 Not Found`, `409 Conflict` for a non-deletable status.
+
+#### 18. Emergency Compatibility Matching by Typed Location
 - **Method & Path:** `GET /api/matches?bloodGroup=B%2B&city=Gulshan`
 - **Query Parameters:**
   - `bloodGroup`: Required ABO/Rh blood type (e.g., `B+`).
@@ -415,10 +445,13 @@ The top navigation opens a focused view for each item. It includes account pages
 ### 2. Volunteer Blood Donor Registration:
 - Register with a name, email, phone, blood group, and a location typed as an area and city (for example, `Dhanmondi, Dhaka`).
 - Enter a familiar area name, city, or both so recipients can find the donor by typing part of that location.
+- In the donor directory, record past donation dates and optional locations. LifeLink shows the history and a 120-day reminder date; this reminder is not medical clearance to donate.
+- Sign in before registering a donor. Only the same account can add that donor's donation history.
 
 ### 3. Blood Request Submission:
 - Submit the patient name, required blood group, urgency (`Normal`, `Urgent`, or `Critical`), hospital name, typed area and city, and emergency contact phone.
-- The active request list provides urgency filtering and sorting.
+- Sign in before submitting. Only the account that created the request can edit, mark it fulfilled, or delete it while open or fulfilled.
+- The request management list provides urgency and status filters, editing for open requests, and an action to mark a request fulfilled. Fulfilled requests remain visible for reference.
 
 ### 4. Emergency Donor Matching:
 - Select the recipient blood group and optionally type an area or city, such as `Gulshan` or `Dhaka`.

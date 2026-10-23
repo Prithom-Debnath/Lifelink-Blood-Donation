@@ -336,6 +336,7 @@ main [data-page-view][hidden] {
 .form-group input[type="text"],
 .form-group input[type="email"],
 .form-group input[type="password"],
+.form-group input[type="date"],
 .form-group select {
   width: 100%;
   padding: 0.5rem 0.65rem;
@@ -553,11 +554,6 @@ main [data-page-view][hidden] {
 .badge-fulfilled {
   background-color: #dcfce7;
   color: #15803d;
-}
-
-.badge-cancelled {
-  background-color: #fee2e2;
-  color: #b91c1c;
 }
 
 /* Requests Table Toolbar (Urgency Filtering and Sorting) */
@@ -821,6 +817,7 @@ body::before {
 .form-group input[type="text"],
 .form-group input[type="email"],
 .form-group input[type="password"],
+.form-group input[type="date"],
 .form-group select,
 .toolbar-item select {
   min-height: 44px;
@@ -844,6 +841,7 @@ body::before {
 }
 
 .form-group input:focus,
+.form-group input[type="date"]:focus,
 .form-group select:focus,
 .toolbar-item select:focus {
   border-color: #ba3157;
@@ -1104,6 +1102,70 @@ body::before {
   .profile-status {
     margin-left: 0;
   }
+}
+
+.request-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  min-width: 150px;
+}
+
+.request-actions .btn {
+  min-height: 34px;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.76rem;
+}
+
+.request-edit-form,
+.donation-record-form {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid #ead9df;
+  border-radius: 10px;
+  background: #fffafb;
+}
+
+.request-edit-form[hidden],
+.donation-record-form[hidden] {
+  display: none;
+}
+
+.request-edit-form h3,
+.donation-record-form h3 {
+  margin: 0 0 1rem;
+  color: #7f1538;
+}
+
+.request-edit-form .form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.donation-record-form .form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.donation-history-item {
+  margin-bottom: 0.3rem;
+  white-space: nowrap;
+}
+
+.donation-history-item small {
+  display: block;
+}
+
+.badge-reminder {
+  background: #e0f2fe;
+  color: #075985;
+}
+
+.badge-reminder-due {
+  background: #fef3c7;
+  color: #92400e;
 }
 
 @media (max-width: 480px) {

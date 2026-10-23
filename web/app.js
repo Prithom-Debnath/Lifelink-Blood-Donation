@@ -141,6 +141,8 @@ function switchAuthTab(tabName, animate = false) {
 
 function renderProfile(user) {
   currentUser = user;
+  loadDonors();
+  loadBloodRequests();
 
   document.getElementById('profile-name').textContent = user.name || 'User';
   document.getElementById('profile-email').textContent = user.email || '—';
@@ -182,6 +184,8 @@ function renderProfile(user) {
 function setLoggedOutState() {
   currentUser = null;
   clearToken();
+  loadDonors();
+  loadBloodRequests();
 
   const statusEl = document.getElementById('header-user-status');
   if (statusEl) {
@@ -321,7 +325,7 @@ function handleHeaderAuthClick() {
 
 async function loadDonors() {
   const tbody = document.getElementById('donors-tbody');
-  tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Loading donors...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Loading donors...</td></tr>';
 
   try {
     const res = await fetch('/api/donors');
@@ -331,11 +335,31 @@ async function loadDonors() {
     const donors = await res.json();
 
     if (!Array.isArray(donors) || donors.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No volunteer donors registered yet.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No volunteer donors registered yet.</td></tr>';
       return;
     }
 
     tbody.innerHTML = donors.map(d => {
+      const history = Array.isArray(d.donation_history) ? [...d.donation_history] : [];
+      history.sort((a, b) => String(b.donation_date).localeCompare(String(a.donation_date)));
+      const historyHTML = history.length
+        ? history.map(record => {
+          const date = String(record.donation_date || '').slice(0, 10);
+          const location = record.location ? `<small class="text-muted">${escapeHTML(record.location)}</small>` : '';
+          return `<div class="donation-history-item">${escapeHTML(formatDateOnly(date))}${location}</div>`;
+        }).join('')
+        : '<span class="text-muted">No donations recorded</span>';
+
+      let reminderHTML = '<span class="text-muted">No reminder yet</span>';
+      if (history.length) {
+        const latestDate = String(history[0].donation_date || '').slice(0, 10);
+        const reminderDate = addDaysToDateOnly(latestDate, 120);
+        const today = getLocalDateOnly(new Date());
+        const dueClass = reminderDate <= today ? 'badge-reminder-due' : 'badge-reminder';
+        const dueText = reminderDate <= today ? 'Reminder date reached' : 'Reminder';
+        reminderHTML = `<span class="badge ${dueClass}">${dueText}</span><div>${escapeHTML(formatDateOnly(reminderDate))}</div>`;
+      }
+
       return `
         <tr>
           <td><strong>${escapeHTML(d.name)}</strong></td>
@@ -353,16 +377,94 @@ async function loadDonors() {
               ${d.availability ? 'Available' : 'Unavailable'}
             </span>
           </td>
+          <td>${historyHTML}</td>
+          <td>${reminderHTML}</td>
+          <td>${currentUser && d.owner_user_id === currentUser.id ? `<button type="button" class="btn btn-secondary btn-sm" data-donation-action="record" data-donor-id="${escapeHTML(d.id)}" data-donor-name="${escapeHTML(d.name)}">Record Donation</button>` : '<span class="text-muted">Owner only</span>'}</td>
         </tr>
       `;
     }).join('');
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted">Failed to load donors: ${escapeHTML(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted">Failed to load donors: ${escapeHTML(err.message)}</td></tr>`;
   }
+}
+
+function getLocalDateOnly(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function addDaysToDateOnly(dateText, days) {
+  const [year, month, day] = dateText.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + days);
+  return getLocalDateOnly(date);
+}
+
+function formatDateOnly(dateText) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText)) return 'Unknown date';
+  const [year, month, day] = dateText.split('-').map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString(undefined, {
+    year: 'numeric', month: 'short', day: 'numeric',
+  });
+}
+
+function openDonationForm(event) {
+  const button = event.target.closest('[data-donation-action="record"]');
+  if (!button) return;
+
+  const form = document.getElementById('donation-record-form');
+  const dateInput = document.getElementById('donation-date');
+  const today = getLocalDateOnly(new Date());
+  document.getElementById('donation-donor-id').value = button.dataset.donorId;
+  document.getElementById('donation-donor-name').textContent = `Donor: ${button.dataset.donorName}`;
+  dateInput.max = today;
+  dateInput.value = today;
+  form.hidden = false;
+  form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+async function handleDonationRecordSubmit(event) {
+  event.preventDefault();
+  const donorId = document.getElementById('donation-donor-id').value;
+  const donationDate = document.getElementById('donation-date').value;
+  const location = document.getElementById('donation-location').value.trim();
+
+  try {
+    const res = await fetch(`/api/donors/${encodeURIComponent(donorId)}/donations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken() || ''}` },
+      body: JSON.stringify({ donation_date: donationDate, location }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showFeedback('donation-record-feedback', data.error || 'Could not record donation.', true);
+      return;
+    }
+
+    showFeedback('donation-record-feedback', `Donation saved. App reminder date: ${formatDateOnly(data.next_reminder_date)} (120-day reminder only).`, false);
+    document.getElementById('donation-location').value = '';
+    document.getElementById('donation-date').value = getLocalDateOnly(new Date());
+    await loadDonors();
+  } catch (err) {
+    showFeedback('donation-record-feedback', `Network error: ${err.message}`, true);
+  }
+}
+
+function closeDonationForm() {
+  const form = document.getElementById('donation-record-form');
+  form.reset();
+  form.hidden = true;
 }
 
 async function handleDonorSubmit(e) {
   e.preventDefault();
+
+  if (!getToken()) {
+    showFeedback('donor-form-feedback', 'Please sign in before registering a volunteer donor.', true);
+    return;
+  }
 
   const payload = {
     name: document.getElementById('donor-name').value.trim(),
@@ -376,7 +478,7 @@ async function handleDonorSubmit(e) {
   try {
     const res = await fetch('/api/donors', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
       body: JSON.stringify(payload),
     });
 
@@ -403,10 +505,11 @@ async function handleDonorSubmit(e) {
 
 async function loadBloodRequests() {
   const tbody = document.getElementById('requests-tbody');
-  tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Loading requests...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Loading requests...</td></tr>';
 
   const urgencyFilter = document.getElementById('filter-urgency').value;
   const sortBy = document.getElementById('sort-requests').value;
+  const statusFilter = document.getElementById('filter-request-status').value;
 
   let url = '/api/requests?';
   const params = [];
@@ -415,6 +518,9 @@ async function loadBloodRequests() {
   }
   if (sortBy) {
     params.push(`sort=${encodeURIComponent(sortBy)}`);
+  }
+  if (statusFilter) {
+    params.push(`status=${encodeURIComponent(statusFilter)}`);
   }
   url += params.join('&');
 
@@ -426,19 +532,30 @@ async function loadBloodRequests() {
     const requests = await res.json();
 
     if (!Array.isArray(requests) || requests.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No blood requests found.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No blood requests found.</td></tr>';
       return;
     }
 
     tbody.innerHTML = requests.map(r => {
       let statusBadge = 'badge-open';
       if (r.status === 'fulfilled') statusBadge = 'badge-fulfilled';
-      if (r.status === 'cancelled') statusBadge = 'badge-cancelled';
 
       const urgency = (r.urgency || 'normal').toLowerCase();
+      const status = (r.status || 'open').toLowerCase();
       let urgencyBadge = 'badge-normal';
       if (urgency === 'critical') urgencyBadge = 'badge-critical';
       else if (urgency === 'urgent') urgencyBadge = 'badge-urgent';
+
+      const isOwner = currentUser && r.owner_user_id === currentUser.id;
+      const actions = status === 'open' && isOwner ? `
+        <div class="request-actions">
+          <button type="button" class="btn btn-secondary" data-request-action="edit" data-request-id="${escapeHTML(r.id)}">Edit</button>
+          <button type="button" class="btn btn-success" data-request-action="fulfill" data-request-id="${escapeHTML(r.id)}">Fulfilled</button>
+          <button type="button" class="btn btn-danger" data-request-action="delete" data-request-id="${escapeHTML(r.id)}">Delete</button>
+        </div>
+      ` : (status === 'fulfilled' && isOwner
+        ? `<button type="button" class="btn btn-danger" data-request-action="delete" data-request-id="${escapeHTML(r.id)}">Delete</button>`
+        : (status === 'open' ? '<span class="text-muted">Owner only</span>' : '<span class="text-muted">Closed</span>'));
 
       return `
         <tr>
@@ -451,17 +568,23 @@ async function loadBloodRequests() {
 
           </td>
           <td>${escapeHTML(r.contact_phone)}</td>
-          <td><span class="badge ${statusBadge}">${escapeHTML(r.status)}</span></td>
+          <td><span class="badge ${statusBadge}">${escapeHTML(status)}</span></td>
+          <td>${actions}</td>
         </tr>
       `;
     }).join('');
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">Failed to load requests: ${escapeHTML(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted">Failed to load requests: ${escapeHTML(err.message)}</td></tr>`;
   }
 }
 
 async function handleRequestSubmit(e) {
   e.preventDefault();
+
+  if (!getToken()) {
+    showFeedback('request-form-feedback', 'Please sign in before submitting a blood request.', true);
+    return;
+  }
 
   const payload = {
     patient_name: document.getElementById('req-patient-name').value.trim(),
@@ -470,13 +593,12 @@ async function handleRequestSubmit(e) {
     hospital: document.getElementById('req-hospital').value.trim(),
     city: document.getElementById('req-city').value.trim(),
     contact_phone: document.getElementById('req-contact-phone').value.trim(),
-    status: document.getElementById('req-status').value,
   };
 
   try {
     const res = await fetch('/api/requests', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
       body: JSON.stringify(payload),
     });
 
@@ -487,15 +609,115 @@ async function handleRequestSubmit(e) {
       return;
     }
 
-    showFeedback('request-form-feedback', `Request for ${data.patient_name} (${(data.urgency || 'normal').toUpperCase()}) submitted successfully!`, false);
+    let successMessage = `Request for ${data.patient_name} (${(data.urgency || 'normal').toUpperCase()}) submitted successfully!`;
+    if (data.urgency === 'urgent' || data.urgency === 'critical') {
+      const sentCount = Number(res.headers.get('X-Notifications-Sent') || 0);
+      successMessage += sentCount > 0
+        ? ` Email alert sent to ${sentCount} matching donor(s).`
+        : ' No email alert was sent. Check SMTP settings, matching donors, and the server log.';
+    }
+    showFeedback('request-form-feedback', successMessage, false);
     document.getElementById('request-form').reset();
-    document.getElementById('req-status').value = 'open';
     document.getElementById('req-urgency').value = 'normal';
 
     loadBloodRequests();
   } catch (err) {
     showFeedback('request-form-feedback', `Network error: ${err.message}`, true);
   }
+}
+
+async function handleRequestTableAction(event) {
+  const button = event.target.closest('[data-request-action]');
+  if (!button) return;
+
+  const requestId = button.dataset.requestId;
+  const action = button.dataset.requestAction;
+  if (action === 'delete') {
+    if (!window.confirm('Delete this blood request permanently?')) return;
+    try {
+      const res = await fetch(`/api/requests/${encodeURIComponent(requestId)}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${getToken() || ''}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not delete this request.');
+      await loadBloodRequests();
+    } catch (err) {
+      window.alert(err.message);
+    }
+    return;
+  }
+  if (action === 'edit') {
+    try {
+      const res = await fetch(`/api/requests/${encodeURIComponent(requestId)}`);
+      const request = await res.json();
+      if (!res.ok) throw new Error(request.error || 'Could not load this request.');
+      if (request.status !== 'open') throw new Error('Only open requests can be edited.');
+
+      document.getElementById('edit-request-id').value = request.id;
+      document.getElementById('edit-patient-name').value = request.patient_name || '';
+      document.getElementById('edit-blood-group').value = request.blood_group || '';
+      document.getElementById('edit-urgency').value = request.urgency || 'normal';
+      document.getElementById('edit-hospital').value = request.hospital || '';
+      document.getElementById('edit-city').value = request.city || '';
+      document.getElementById('edit-contact-phone').value = request.contact_phone || '';
+      document.getElementById('request-edit-form').hidden = false;
+      document.getElementById('request-edit-form').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch (err) {
+      window.alert(err.message);
+    }
+    return;
+  }
+
+  if (action !== 'fulfill') return;
+  const nextStatus = 'fulfilled';
+  if (!window.confirm('Mark this blood request as fulfilled?')) return;
+
+  try {
+    const res = await fetch(`/api/requests/${encodeURIComponent(requestId)}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken() || ''}` },
+      body: JSON.stringify({ status: nextStatus }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Could not update request status.');
+    await loadBloodRequests();
+  } catch (err) {
+    window.alert(err.message);
+  }
+}
+
+async function handleRequestEditSubmit(event) {
+  event.preventDefault();
+  const requestId = document.getElementById('edit-request-id').value;
+  const payload = {
+    patient_name: document.getElementById('edit-patient-name').value.trim(),
+    blood_group: document.getElementById('edit-blood-group').value,
+    urgency: document.getElementById('edit-urgency').value,
+    hospital: document.getElementById('edit-hospital').value.trim(),
+    city: document.getElementById('edit-city').value.trim(),
+    contact_phone: document.getElementById('edit-contact-phone').value.trim(),
+  };
+
+  try {
+    const res = await fetch(`/api/requests/${encodeURIComponent(requestId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken() || ''}` },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Could not save request changes.');
+    closeRequestEditForm();
+    await loadBloodRequests();
+  } catch (err) {
+    showFeedback('request-edit-feedback', err.message, true);
+  }
+}
+
+function closeRequestEditForm() {
+  const form = document.getElementById('request-edit-form');
+  form.reset();
+  form.hidden = true;
 }
 
 // -------------------------------------------------------------
@@ -585,12 +807,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Bind Donor, Request, and Match forms
   document.getElementById('donor-form').addEventListener('submit', handleDonorSubmit);
+  document.getElementById('donors-tbody').addEventListener('click', openDonationForm);
+  document.getElementById('donation-record-form').addEventListener('submit', handleDonationRecordSubmit);
+  document.getElementById('cancel-donation-btn').addEventListener('click', closeDonationForm);
   document.getElementById('request-form').addEventListener('submit', handleRequestSubmit);
   document.getElementById('match-form').addEventListener('submit', handleMatchSearch);
 
   // Bind Blood Request filtering and sorting toolbar
   document.getElementById('filter-urgency').addEventListener('change', loadBloodRequests);
   document.getElementById('sort-requests').addEventListener('change', loadBloodRequests);
+  document.getElementById('filter-request-status').addEventListener('change', loadBloodRequests);
+  document.getElementById('requests-tbody').addEventListener('click', handleRequestTableAction);
+  document.getElementById('request-edit-form').addEventListener('submit', handleRequestEditSubmit);
+  document.getElementById('cancel-request-edit-btn').addEventListener('click', closeRequestEditForm);
 
   // Bind refresh buttons
   document.getElementById('refresh-donors-btn').addEventListener('click', loadDonors);

@@ -26,6 +26,7 @@ type mockBloodRequestRepo struct {
 	createErr   error
 	listErr     error
 	findByIDErr error
+	updateErr   error
 }
 
 func newMockBloodRequestRepo() *mockBloodRequestRepo {
@@ -90,6 +91,43 @@ func (m *mockBloodRequestRepo) FindByID(ctx context.Context, id string) (*models
 		return nil, repositories.ErrBloodRequestNotFound
 	}
 	return &req, nil
+}
+
+func (m *mockBloodRequestRepo) Update(ctx context.Context, id string, req *models.BloodRequest) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.updateErr != nil {
+		return m.updateErr
+	}
+	current, exists := m.requests[id]
+	if !exists {
+		return repositories.ErrBloodRequestNotFound
+	}
+	if current.Status != models.StatusOpen {
+		return repositories.ErrBloodRequestNotOpen
+	}
+	req.ID = current.ID
+	req.CreatedAt = current.CreatedAt
+	req.UpdatedAt = time.Now().UTC()
+	req.Status = current.Status
+	m.requests[id] = *req
+	return nil
+}
+
+func (m *mockBloodRequestRepo) UpdateStatus(ctx context.Context, id, status string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	current, exists := m.requests[id]
+	if !exists {
+		return repositories.ErrBloodRequestNotFound
+	}
+	if current.Status != models.StatusOpen {
+		return repositories.ErrBloodRequestNotOpen
+	}
+	current.Status = status
+	current.UpdatedAt = time.Now().UTC()
+	m.requests[id] = current
+	return nil
 }
 
 func setupTestRouterWithRequestRepo(repo repositories.BloodRequestRepository) http.Handler {
@@ -463,7 +501,7 @@ func TestBloodRequestEndpoints_Validation(t *testing.T) {
 		"city": "Dhaka",
 		"contact_phone": "+8801700112233",
 		"status": "pending"
-	}`, "invalid status: must be one of open, fulfilled, cancelled")
+	}`, "invalid status: must be one of open or fulfilled")
 
 	// 8. Valid status should succeed (201 Created)
 	validReq, _ := http.NewRequest(http.MethodPost, "/api/requests", bytes.NewBufferString(`{
@@ -583,5 +621,3 @@ func TestBloodRequestEndpoints_UrgencyAndCoordinates(t *testing.T) {
 		}
 	}
 }
-
-

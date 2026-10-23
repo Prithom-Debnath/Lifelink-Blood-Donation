@@ -255,7 +255,7 @@
           <h2>Registered Donors</h2>
           <button id="refresh-donors-btn" class="btn btn-secondary btn-sm">Refresh List</button>
         </div>
-        <p class="section-desc">Active donor directory loaded from <code>/api/donors</code>.</p>
+        <p class="section-desc">Donation dates are recorded here. The 120-day reminder is an educational prompt, not medical clearance.</p>
 
         <div class="table-container scrollable-table">
           <table class="data-table" id="donors-table">
@@ -266,15 +266,37 @@
                 <th>Location</th>
                 <th>Contact</th>
                 <th>Status</th>
+                <th>Donation History</th>
+                <th>Next Reminder</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody id="donors-tbody">
               <tr>
-                <td colspan="5" class="text-center text-muted">Loading donors...</td>
+                <td colspan="8" class="text-center text-muted">Loading donors...</td>
               </tr>
             </tbody>
           </table>
         </div>
+
+        <form id="donation-record-form" class="donation-record-form" hidden>
+          <h3>Record a Donation</h3>
+          <input type="hidden" id="donation-donor-id">
+          <p id="donation-donor-name" class="section-desc"></p>
+          <div class="form-group">
+            <label for="donation-date">Donation Date *</label>
+            <input type="date" id="donation-date" required>
+          </div>
+          <div class="form-group">
+            <label for="donation-location">Hospital / Donation Location</label>
+            <input type="text" id="donation-location" placeholder="Optional">
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Save Donation</button>
+            <button type="button" id="cancel-donation-btn" class="btn btn-secondary">Close</button>
+          </div>
+          <div id="donation-record-feedback" class="feedback-msg"></div>
+        </form>
       </section>
     </div>
 
@@ -331,15 +353,6 @@
             <input type="text" id="req-contact-phone" placeholder="e.g. +8801711223344" required>
           </div>
 
-          <div class="form-group">
-            <label for="req-status">Initial Status</label>
-            <select id="req-status">
-              <option value="open" selected>open (Default)</option>
-              <option value="fulfilled">fulfilled</option>
-              <option value="cancelled">cancelled</option>
-            </select>
-          </div>
-
           <button type="submit" class="btn btn-danger" id="req-submit-btn">Submit Request</button>
           <div id="request-form-feedback" class="feedback-msg"></div>
         </form>
@@ -347,10 +360,10 @@
 
       <section class="card" data-page-view="active-requests" hidden>
         <div class="section-header-row">
-          <h2>Active Blood Requests</h2>
+          <h2>Blood Request Management</h2>
           <button id="refresh-requests-btn" class="btn btn-secondary btn-sm">Refresh List</button>
         </div>
-        <p class="section-desc">Patient requests loaded from <code>/api/requests</code>.</p>
+        <p class="section-desc">Edit open requests or mark them fulfilled. Fulfilled requests remain in the list for reference.</p>
 
         <!-- Requests Filtering and Sorting Toolbar -->
         <div class="table-toolbar">
@@ -370,6 +383,14 @@
               <option value="urgency">Highest Urgency (Critical &gt; Urgent &gt; Normal)</option>
             </select>
           </div>
+          <div class="toolbar-item">
+            <label for="filter-request-status">Status:</label>
+            <select id="filter-request-status">
+              <option value="">All statuses</option>
+              <option value="open">Open</option>
+              <option value="fulfilled">Fulfilled</option>
+            </select>
+          </div>
         </div>
 
         <div class="table-container scrollable-table">
@@ -382,15 +403,59 @@
                 <th>Hospital &amp; City</th>
                 <th>Contact</th>
                 <th>Status</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody id="requests-tbody">
               <tr>
-                <td colspan="6" class="text-center text-muted">Loading requests...</td>
+                <td colspan="7" class="text-center text-muted">Loading requests...</td>
               </tr>
             </tbody>
           </table>
         </div>
+
+        <form id="request-edit-form" class="request-edit-form" hidden>
+          <h3>Edit Blood Request</h3>
+          <input type="hidden" id="edit-request-id">
+          <div class="form-group">
+            <label for="edit-patient-name">Patient Name *</label>
+            <input type="text" id="edit-patient-name" required>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-blood-group">Required Blood Group *</label>
+              <select id="edit-blood-group" required>
+                <option value="A+">A+</option><option value="A-">A-</option>
+                <option value="B+">B+</option><option value="B-">B-</option>
+                <option value="AB+">AB+</option><option value="AB-">AB-</option>
+                <option value="O+">O+</option><option value="O-">O-</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="edit-urgency">Urgency *</label>
+              <select id="edit-urgency" required>
+                <option value="normal">Normal</option><option value="urgent">Urgent</option><option value="critical">Critical</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="edit-hospital">Hospital *</label>
+            <input type="text" id="edit-hospital" required>
+          </div>
+          <div class="form-group">
+            <label for="edit-city">Location (Area, City) *</label>
+            <input type="text" id="edit-city" required>
+          </div>
+          <div class="form-group">
+            <label for="edit-contact-phone">Contact Phone *</label>
+            <input type="text" id="edit-contact-phone" required>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+            <button type="button" id="cancel-request-edit-btn" class="btn btn-secondary">Discard</button>
+          </div>
+          <div id="request-edit-feedback" class="feedback-msg"></div>
+        </form>
       </section>
     </div>
   </main>
