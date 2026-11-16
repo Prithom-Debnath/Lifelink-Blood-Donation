@@ -11,8 +11,8 @@
 
 const TOKEN_KEY = 'lifelink_jwt_token';
 let currentUser = null;
-let currentAppRoute = 'sign-in';
-let currentAppPage = 'account';
+let currentAppRoute = 'find-donors';
+let currentAppPage = 'find-donors';
 
 // Helper: Escape HTML characters to prevent XSS when inserting dynamic text into the DOM
 function escapeHTML(str) {
@@ -139,8 +139,28 @@ function switchAuthTab(tabName, animate = false) {
   }
 }
 
+function updateAccountNavigation(isAuthenticated) {
+  const signInLink = document.querySelector('#top-navigation [data-page-route="sign-in"]');
+  const createAccountLink = document.querySelector('#top-navigation [data-page-route="create-account"]');
+  const profileLink = document.querySelector('#top-navigation [data-page-route="my-profile"]');
+
+  if (signInLink) {
+    signInLink.hidden = isAuthenticated;
+    signInLink.style.display = isAuthenticated ? 'none' : '';
+  }
+  if (createAccountLink) {
+    createAccountLink.hidden = isAuthenticated;
+    createAccountLink.style.display = isAuthenticated ? 'none' : '';
+  }
+  if (profileLink) {
+    profileLink.hidden = !isAuthenticated;
+    profileLink.style.display = isAuthenticated ? '' : 'none';
+  }
+}
+
 function renderProfile(user) {
   currentUser = user;
+  updateAccountNavigation(true);
   loadDonors();
   loadBloodRequests();
 
@@ -178,10 +198,15 @@ function renderProfile(user) {
     badgeEl.className = 'badge badge-available';
   }
 
-  if (currentAppRoute === 'my-profile') switchAuthTab('profile');
+  if (currentAppRoute === 'sign-in' || currentAppRoute === 'create-account') {
+    navigateToAppRoute('my-profile');
+  } else if (currentAppRoute === 'my-profile') {
+    switchAuthTab('profile');
+  }
 }
 
 function setLoggedOutState() {
+  updateAccountNavigation(false);
   currentUser = null;
   clearToken();
   loadDonors();
@@ -195,7 +220,7 @@ function setLoggedOutState() {
 
   const authBtn = document.getElementById('header-auth-btn');
   if (authBtn) {
-    authBtn.textContent = 'Sign In / Register';
+    authBtn.textContent = 'Sign In';
   }
 
   const badgeEl = document.getElementById('auth-badge');
@@ -213,6 +238,7 @@ function setLoggedOutState() {
 
 async function checkAuthAndLoadProfile() {
   const token = getToken();
+  updateAccountNavigation(Boolean(token));
   if (!token) {
     setLoggedOutState();
     return;
@@ -730,17 +756,26 @@ async function handleMatchSearch(e) {
   const bloodGroup = document.getElementById('match-blood-group').value;
   const city = document.getElementById('match-city').value.trim();
   const tbody = document.getElementById('matches-tbody');
+  const summary = document.getElementById('match-results-summary');
+  const submitButton = document.getElementById('find-matches-btn');
+  const table = document.getElementById('matches-table');
 
   if (!bloodGroup) {
-    showFeedback('match-feedback', 'Please select a recipient blood group.', true);
+    showFeedback('match-feedback', 'Choose the patient’s blood group to search.', true);
     return;
   }
 
-  tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Searching for compatible donors...</td></tr>';
+  const locationText = city ? ' in ' + city : '';
+  tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Searching compatible donor listings…</td></tr>';
+  tbody.setAttribute('aria-busy', 'true');
+  table.setAttribute('aria-busy', 'true');
+  summary.textContent = 'Searching for compatible donors' + locationText + '…';
+  submitButton.disabled = true;
+  submitButton.textContent = 'Searching…';
 
-  let url = `/api/matches?bloodGroup=${encodeURIComponent(bloodGroup)}`;
+  let url = '/api/matches?bloodGroup=' + encodeURIComponent(bloodGroup);
   if (city) {
-    url += `&city=${encodeURIComponent(city)}`;
+    url += '&city=' + encodeURIComponent(city);
   }
 
   try {
@@ -748,37 +783,49 @@ async function handleMatchSearch(e) {
     const data = await res.json();
 
     if (!res.ok) {
-      showFeedback('match-feedback', data.error || 'Failed to search matches.', true);
-      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Search error.</td></tr>';
+      showFeedback('match-feedback', data.error || 'Could not complete the donor search. Please try again.', true);
+      summary.textContent = 'The search could not be completed. Please try again.';
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">We could not load donor results.</td></tr>';
       return;
     }
 
     if (!Array.isArray(data) || data.length === 0) {
-      const locationText = city ? ` near ${escapeHTML(city)}` : '';
-      tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">No available donors found compatible with recipient <strong>${escapeHTML(bloodGroup)}</strong>${locationText}.</td></tr>`;
-      showFeedback('match-feedback', 'No matching donors found.', false);
+      const place = city ? ' in ' + escapeHTML(city) : '';
+      summary.textContent = 'No compatible donors found' + (city ? ' in ' + city : '') + '. Try another area or post a request.';
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No available donors compatible with <strong>' + escapeHTML(bloodGroup) + '</strong>' + place + '. Try another area or create a blood request.</td></tr>';
       return;
     }
 
-    tbody.innerHTML = data.map(d => `
-      <tr>
-        <td><strong>${escapeHTML(d.name)}</strong></td>
-        <td><span class="badge badge-blood">${escapeHTML(d.blood_group)}</span></td>
-        <td>${escapeHTML(d.city)}</td>
-        <td>${escapeHTML(d.phone)}</td>
-        <td>${escapeHTML(d.email)}</td>
-        <td>
-          <span class="badge ${d.availability ? 'badge-available' : 'badge-unavailable'}">
-            ${d.availability ? 'Available' : 'Unavailable'}
-          </span>
-        </td>
-      </tr>
-    `).join('');
+    tbody.innerHTML = data.map((d) => {
+      const phone = String(d.phone || '').trim();
+      const phoneHref = phone.replace(/[^\d+]/g, '');
+      const email = String(d.email || '').trim();
+      const emailHref = encodeURIComponent(email).replace(/%40/ig, '@');
+      const contactLinks = [
+        phoneHref ? '<a class="contact-action" href="tel:' + escapeHTML(phoneHref) + '">Call <span>' + escapeHTML(phone) + '</span></a>' : '',
+        email ? '<a class="contact-action contact-action-secondary" href="mailto:' + emailHref + '">Email</a>' : '',
+      ].filter(Boolean).join('');
 
-    showFeedback('match-feedback', `Found ${data.length} compatible available donor(s)!`, false);
+      return '<tr>' +
+        '<td><strong>' + escapeHTML(d.name) + '</strong><span class="match-donor-caption">Volunteer donor</span></td>' +
+        '<td><span class="badge badge-blood">' + escapeHTML(d.blood_group) + '</span></td>' +
+        '<td>' + escapeHTML(d.city) + '</td>' +
+        '<td><div class="match-contact-actions">' + (contactLinks || '<span class="text-muted">Contact details unavailable</span>') + '</div></td>' +
+        '<td><span class="badge ' + (d.availability ? 'badge-available' : 'badge-unavailable') + '">' +
+          (d.availability ? 'Available' : 'Unavailable') + '</span></td>' +
+        '</tr>';
+    }).join('');
+
+    summary.textContent = data.length + ' compatible donor' + (data.length === 1 ? '' : 's') + ' found' + (city ? ' in ' + city : '') + '.';
   } catch (err) {
-    showFeedback('match-feedback', `Network error: ${err.message}`, true);
-    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">Error: ${escapeHTML(err.message)}</td></tr>`;
+    showFeedback('match-feedback', 'Unable to reach LifeLink right now. Please try again in a moment.', true);
+    summary.textContent = 'The search could not be completed. Check your connection and try again.';
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Donor results are temporarily unavailable.</td></tr>';
+  } finally {
+    tbody.removeAttribute('aria-busy');
+    table.removeAttribute('aria-busy');
+    submitButton.disabled = false;
+    submitButton.textContent = 'Find donors';
   }
 }
 // -------------------------------------------------------------
@@ -795,7 +842,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   if (!window.location.hash) {
-    window.history.replaceState(null, '', '#sign-in');
+    window.history.replaceState(null, '', '#find-donors');
   }
   updateAppPageFromHash();
 

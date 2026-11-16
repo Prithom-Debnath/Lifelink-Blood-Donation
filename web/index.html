@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LifeLink — Blood Donation Management</title>
+  <title>LifeLink — Find and Offer Blood Donors</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -11,26 +11,46 @@
     <div class="header-container">
       <div class="header-branding">
         <h1>LifeLink</h1>
-        <p class="subtitle">Here we are to find blood to help each other</p>
+        <p class="subtitle">Connecting local blood donors with people who need help.</p>
       </div>
       <div class="header-auth" id="header-auth-bar">
         <span class="auth-status-indicator" id="header-user-status" hidden></span>
-        <button type="button" class="btn btn-sm btn-outline" id="header-auth-btn">Sign In / Register</button>
+        <button type="button" class="btn btn-sm btn-outline" id="header-auth-btn">Sign In</button>
       </div>
     </div>
     <nav class="top-navigation" id="top-navigation" aria-label="Main navigation">
-      <a href="#sign-in" data-page-route="sign-in" data-target-page="account" data-auth-tab="login">Sign In</a>
-      <a href="#create-account" data-page-route="create-account" data-target-page="account" data-auth-tab="register">Create Account</a>
-      <a href="#my-profile" data-page-route="my-profile" data-target-page="account" data-auth-tab="profile">My Profile</a>
-      <a href="#find-donors" data-page-route="find-donors" data-target-page="find-donors">Find Donors</a>
-      <a href="#register-donor" data-page-route="register-donor" data-target-page="register-donor">Register Volunteer Blood Donor</a>
-      <a href="#registered-donors" data-page-route="registered-donors" data-target-page="registered-donors">Registered Donors</a>
-      <a href="#submit-request" data-page-route="submit-request" data-target-page="submit-request">Submit Blood Request</a>
-      <a href="#active-requests" data-page-route="active-requests" data-target-page="active-requests">Active Blood Requests</a>
+      <a class="nav-primary" href="#find-donors" data-page-route="find-donors" data-target-page="find-donors">Find donors</a>
+      <a class="nav-primary" href="#submit-request" data-page-route="submit-request" data-target-page="submit-request">Request blood</a>
+      <a class="nav-primary" href="#register-donor" data-page-route="register-donor" data-target-page="register-donor">Become a donor</a>
+      <a href="#active-requests" data-page-route="active-requests" data-target-page="active-requests">Open requests</a>
+      <a href="#registered-donors" data-page-route="registered-donors" data-target-page="registered-donors">Donor directory</a>
+      <span class="nav-divider" aria-hidden="true"></span>
+      <a class="nav-account" href="#sign-in" data-page-route="sign-in" data-target-page="account" data-auth-tab="login">Sign In</a>
+      <a class="nav-account" href="#create-account" data-page-route="create-account" data-target-page="account" data-auth-tab="register">Create New Account</a>
+      <a class="nav-account" href="#my-profile" data-page-route="my-profile" data-target-page="account" data-auth-tab="profile">My account</a>
     </nav>
   </header>
 
   <main class="main-container">
+    <section class="welcome-band" data-page-view="find-donors" aria-labelledby="welcome-title">
+      <div class="welcome-copy">
+        <p class="welcome-eyebrow">A community blood donor network</p>
+        <h2 id="welcome-title">Find a donor in your area.</h2>
+        <p>Search volunteer listings by blood group and location, then contact a donor directly.</p>
+        <div class="welcome-actions">
+          <a class="btn btn-light" href="#submit-request">Request blood</a>
+          <a class="welcome-secondary-link" href="#register-donor">Become a donor <span aria-hidden="true">→</span></a>
+        </div>
+      </div>
+      <aside class="welcome-callout">
+        <span class="welcome-callout-icon" aria-hidden="true">+</span>
+        <div>
+          <p class="welcome-callout-title">Need help finding blood?</p>
+          <p>Post the hospital and contact details so volunteers can respond to your request.</p>
+          <a href="#submit-request">Create a blood request <span aria-hidden="true">→</span></a>
+        </div>
+      </aside>
+    </section>
     <!-- SECTION 1: User Account Portal (Registration, Login, Profile) -->
     <section class="card auth-section" id="auth-section" data-page-view="account" hidden>
       <div class="section-header-row">
@@ -139,17 +159,17 @@
     <section class="card match-section" id="match-section" data-page-view="find-donors" hidden>
       <div class="section-header-row">
         <div>
-          <h2>Find Compatible Donors</h2>
-          <p class="section-desc">Search for available donors by blood group and the city or area you type.</p>
+          <h2>Search compatible donors</h2>
+          <p class="section-desc">Choose the patient&rsquo;s blood group and optionally narrow results to an area or city.</p>
         </div>
       </div>
 
-      <form id="match-form">
+      <form id="match-form" class="match-search-form">
         <div class="form-row">
           <div class="form-group" style="max-width: 220px;">
-            <label for="match-blood-group">Recipient Blood Group *</label>
+            <label for="match-blood-group">Patient blood group <span class="required-mark" aria-hidden="true">*</span></label>
             <select id="match-blood-group" required>
-              <option value="">-- Select Group --</option>
+              <option value="">Select blood group</option>
               <option value="A+">A+</option>
               <option value="A-">A-</option>
               <option value="B+">B+</option>
@@ -162,34 +182,41 @@
           </div>
 
           <div class="form-group">
-            <label for="match-city">Location (City / Area)</label>
-            <input type="text" id="match-city" placeholder="e.g. Dhanmondi, Dhaka">
-            <small class="form-help">Type the area and city to find donors who listed a matching location.</small>
+            <label for="match-city">Area or city <span class="optional-mark">(optional)</span></label>
+            <input type="text" id="match-city" placeholder="e.g. Dhanmondi or Dhaka" autocomplete="address-level2">
+            <small class="form-help">Leave this blank to search all listed locations.</small>
           </div>
 
           <div class="form-group form-actions">
-            <button type="submit" class="btn btn-primary" id="find-matches-btn">Find Matches</button>
+            <button type="submit" class="btn btn-primary" id="find-matches-btn">Find donors</button>
           </div>
         </div>
       </form>
 
-      <div id="match-feedback" class="feedback-msg"></div>
+      <div id="match-feedback" class="feedback-msg" role="status" aria-live="polite"></div>
 
-      <div class="table-container">
-        <table class="data-table" id="matches-table">
+      <div class="match-results-heading">
+        <div>
+          <h3>Donor results</h3>
+          <p id="match-results-summary" aria-live="polite">Choose a blood group to search volunteer listings.</p>
+        </div>
+        <p class="match-results-note">Please call to confirm availability before travelling.</p>
+      </div>
+
+      <div class="table-container match-results-container">
+        <table class="data-table match-results-table" id="matches-table">
           <thead>
             <tr>
-              <th>Donor Name</th>
-              <th>Blood Group</th>
-              <th>City</th>
-              <th>Phone</th>
-              <th>Email</th>
-              <th>Availability</th>
+              <th scope="col">Donor</th>
+              <th scope="col">Blood group</th>
+              <th scope="col">Area</th>
+              <th scope="col">Contact</th>
+              <th scope="col">Availability</th>
             </tr>
           </thead>
-          <tbody id="matches-tbody">
+          <tbody id="matches-tbody" aria-live="polite">
             <tr>
-              <td colspan="6" class="text-center text-muted">Select a blood group and type a city or area to find compatible donors.</td>
+              <td colspan="5" class="text-center text-muted">Select a blood group to see compatible donor listings.</td>
             </tr>
           </tbody>
         </table>
@@ -461,9 +488,9 @@
   </main>
 
   <footer class="app-footer">
-    <p>Thanks for your contribution</p>
+    <p>LifeLink helps connect volunteer donors with people in need. For urgent care, contact a hospital directly.</p>
   </footer>
 
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=auth-nav-20261116"></script>
 </body>
 </html>
